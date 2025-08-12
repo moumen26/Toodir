@@ -70,6 +70,16 @@ apiClient.interceptors.response.use(
       return Promise.reject(new Error('Server error. Please try again later.'));
     }
 
+    // Handle 429 errors (too many requests)
+    if (error.response?.status === 429) {
+      return Promise.reject(new Error('Too many requests. Please try again later.'));
+    }
+
+    // Handle 408 errors (request timeout)
+    if (error.response?.status === 408) {
+      return Promise.reject(new Error('Request timed out. Please try again later.'));
+    }
+
     // Handle network errors
     if (!error.response) {
       return Promise.reject(new Error('Network error. Please check your connection.'));

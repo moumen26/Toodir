@@ -19,6 +19,7 @@
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/native": "^7.1.17",
     "@react-navigation/stack": "^7.4.7",
+    "@shopify/flash-list": "^2.0.2",
     "@tanstack/react-query": "^5.85.0",
     "axios": "^1.11.0",
     "base-64": "^1.0.0",
@@ -62,6 +63,9 @@
     "jest-expo": "~53.0.9",
     "react-test-renderer": "^19.0.0",
     "typescript": "~5.8.3"
+  },
+  "resolutions": {
+    "@shopify/flash-list": "1.6.3"
   },
   "private": true
 }
