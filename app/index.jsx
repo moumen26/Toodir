@@ -1,48 +1,32 @@
-import { router } from "expo-router";
-import { View, Text, TouchableOpacity } from "react-native";
-import { useEffect } from "react";
+import { View, StyleSheet, Image } from "react-native";
 
-export default function NotFoundScreen() {
-  useEffect(() => {
-    // Auto redirect after 2 seconds
-    const timer = setTimeout(() => {
-      router.replace("/(tabs)/home");
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleGoHome = () => {
-    router.replace("/SignUp");
-  };
-
+export default function Index() {
   return (
     <View
+      className="bg-[#19213D] h-full"
       style={{
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        padding: 20,
-        backgroundColor: "#EF4444",
       }}
     >
-      <Text style={{ color: "white", fontSize: 18, marginBottom: 20 }}>
-        Page Not Found
-      </Text>
-      <TouchableOpacity onPress={handleGoHome}>
-        <Text
-          style={{
-            color: "white",
-            fontSize: 16,
-            textDecorationLine: "underline",
-          }}
-        >
-          Go to Home
-        </Text>
-      </TouchableOpacity>
-      <Text style={{ color: "white", fontSize: 12, marginTop: 20 }}>
-        Redirecting automatically in 2 seconds...
-      </Text>
+      <Image
+        source={require("../assets/index.png")}
+        style={styles.image}
+        resizeMode="contain"
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  text: {
+    color: "#fff",
+    fontSize: 32,
+  },
+  image: {
+    width: 280,
+    height: 220,
+    marginBottom: 10,
+  },
+});

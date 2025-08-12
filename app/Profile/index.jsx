@@ -12,34 +12,23 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "expo-router";
-
-import profileImg from "../../assets/images/profile.jpg";
+import { useAuthStatus, useLogout } from "../hooks/useAuth";
+import { formatDate } from '../util/useFullFunctions';
 
 const Profile = () => {
+  const { user, token } = useAuthStatus();
+  const { logout, isLoading } = useLogout();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
 
   const navigation = useNavigation();
 
-  // Static data matching your home screen user
-  const user = {
-    name: "Khaldi Abdelmoumen",
-    role: "Frontend Developer",
-    email: "moumenkhaldi26@gmail.com",
-    avatar: true,
-    isVerified: true,
-    joinDate: "January 2024",
-    completedTasks: 127,
-    activeProjects: 8,
-    habitStreak: 15,
-  };
-
   const stats = [
     {
       id: 1,
       title: "Tasks Completed",
-      value: user.completedTasks,
+      value: 127,
       icon: "checkmark-circle",
       color: "#10B981",
       trend: "+12%",
@@ -47,7 +36,7 @@ const Profile = () => {
     {
       id: 2,
       title: "Active Projects",
-      value: user.activeProjects,
+      value: 8,
       icon: "folder",
       color: "#3B82F6",
       trend: "+3",
@@ -55,7 +44,7 @@ const Profile = () => {
     {
       id: 3,
       title: "Habit Streak",
-      value: user.habitStreak,
+      value: 15,
       icon: "flame",
       color: "#F59E0B",
       trend: "days",
@@ -142,7 +131,10 @@ const Profile = () => {
       {
         text: "Log Out",
         style: "destructive",
-        onPress: () => Alert.alert("Logged out"),
+        onPress: async () => {
+          await logout();
+        },
+        disabled: isLoading,
       },
     ]);
   };
@@ -154,9 +146,9 @@ const Profile = () => {
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      {user.avatar ? (
+      {user?.profile_picture ? (
         <Image
-          source={profileImg}
+          source={{ uri: user.profile_picture }}
           style={[
             styles.avatarImage,
             { width: size, height: size, borderRadius: size / 2 },
@@ -287,19 +279,21 @@ const Profile = () => {
           <View style={styles.profileHeader}>
             <View style={styles.profileAvatarContainer}>
               {renderAvatar(80)}
-              {user.isVerified && (
+              {user?.is_email_verified && (
                 <View style={styles.verifiedBadge}>
                   <Ionicons name="checkmark" size={16} color="#fff" />
                 </View>
               )}
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.userName}>{user.name}</Text>
-              <Text style={styles.userRole}>{user.role}</Text>
-              <Text style={styles.userEmail}>{user.email}</Text>
+              <Text style={styles.userName}>{user?.full_name}</Text>
+              <Text style={styles.userEmail}>{user?.email}</Text>
+              {user?.phone && (
+                <Text style={styles.userPhone}>{user?.phone}</Text>
+              )}
               <View style={styles.joinDateContainer}>
                 <Ionicons name="calendar-outline" size={14} color="#6B7280" />
-                <Text style={styles.joinDate}>Joined {user.joinDate}</Text>
+                <Text style={styles.joinDate}>Joined {formatDate(user?.created_at)}</Text>
               </View>
             </View>
           </View>
@@ -444,6 +438,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   userEmail: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 8,
+  },
+  userPhone: {
     fontSize: 14,
     color: "#6B7280",
     marginBottom: 8,

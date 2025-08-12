@@ -12,15 +12,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "expo-router";
+import { useAuthStatus } from "../hooks/useAuth";
 
 const Home = () => {
-  // Static data - no hooks
-  const user = {
-    name: "Khaldi Abdelmoumen",
-    role: "Frontend Developer",
-    avatar: null,
-    isVerified: true,
-  };
+  const { user, token } = useAuthStatus();
 
   const projects = [
     {
@@ -233,9 +228,9 @@ const Home = () => {
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      {member.avatar ? (
+      {member?.profile_picture ? (
         <Image
-          source={{ uri: member.avatar }}
+          source={{ uri: member?.profile_picture }}
           style={[
             styles.avatarImage,
             { width: size, height: size, borderRadius: size / 2 },
@@ -362,20 +357,23 @@ const Home = () => {
         <View style={styles.profileCard}>
           <TouchableOpacity
             style={styles.profileContent}
-            onPress={handleProfilePress}
+            // onPress={handleProfilePress}
           >
             <View style={styles.profileLeft}>
               <View style={styles.profileAvatarContainer}>
                 {renderAvatar(user, 48)}
-                {user.isVerified && (
+                {user?.is_email_verified ? (
                   <View style={styles.verifiedBadge}>
                     <Ionicons name="checkmark" size={12} color="#fff" />
+                  </View>
+                ) : (
+                  <View style={styles.unverifiedBadge}>
+                    <Ionicons name="close" size={12} color="#fff" />
                   </View>
                 )}
               </View>
               <View style={styles.profileInfo}>
-                <Text style={styles.userName}>{user.name}</Text>
-                <Text style={styles.userRole}>{user.role}</Text>
+                <Text style={styles.userName}>{user?.full_name}</Text>
               </View>
             </View>
             <View style={styles.profileRight}>
@@ -1021,6 +1019,19 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     backgroundColor: "#10B981",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  unverifiedBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    backgroundColor: "#EF4444",
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
