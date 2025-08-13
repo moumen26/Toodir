@@ -60,7 +60,7 @@ class TagService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching tags:', error);
+      console.log('Error fetching tags:', error);
       throw this.handleError(error);
     }
   }
@@ -81,7 +81,7 @@ class TagService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching tag:', error);
+      console.log('Error fetching tag:', error);
       throw this.handleError(error);
     }
   }
@@ -96,7 +96,7 @@ class TagService {
       
       return response;
     } catch (error) {
-      console.error('Error creating tag:', error);
+      console.log('Error creating tag:', error);
       throw this.handleError(error);
     }
   }
@@ -112,7 +112,7 @@ class TagService {
       
       return response;
     } catch (error) {
-      console.error('Error updating tag:', error);
+      console.log('Error updating tag:', error);
       throw this.handleError(error);
     }
   }
@@ -128,7 +128,7 @@ class TagService {
       
       return response;
     } catch (error) {
-      console.error('Error deleting tag:', error);
+      console.log('Error deleting tag:', error);
       throw this.handleError(error);
     }
   }
@@ -145,7 +145,7 @@ class TagService {
       
       return response;
     } catch (error) {
-      console.error('Error adding tags to project:', error);
+      console.log('Error adding tags to project:', error);
       throw this.handleError(error);
     }
   }
@@ -162,7 +162,7 @@ class TagService {
       
       return response;
     } catch (error) {
-      console.error('Error removing tags from project:', error);
+      console.log('Error removing tags from project:', error);
       throw this.handleError(error);
     }
   }
@@ -177,7 +177,7 @@ class TagService {
       
       return response;
     } catch (error) {
-      console.error('Error removing tag from project:', error);
+      console.log('Error removing tag from project:', error);
       throw this.handleError(error);
     }
   }
@@ -198,7 +198,7 @@ class TagService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching project tags:', error);
+      console.log('Error fetching project tags:', error);
       throw this.handleError(error);
     }
   }
@@ -274,7 +274,7 @@ class TagService {
       const params = { search: query, limit };
       return await this.getTags(params);
     } catch (error) {
-      console.error('Error searching tags:', error);
+      console.log('Error searching tags:', error);
       throw this.handleError(error);
     }
   }

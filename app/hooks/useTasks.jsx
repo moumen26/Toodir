@@ -146,7 +146,7 @@ export const useCreateTask = () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.stats() });
     },
     onError: (error) => {
-      console.error("Error creating task:", error);
+      console.log("Error creating task:", error);
     },
   });
 };

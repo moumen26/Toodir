@@ -133,7 +133,6 @@ const ProjectDetails = () => {
       {/* Rest remains the same but with real comment handling */}
     </View>
   );
-  console.log(displayProject);
   
   // Update renderTasksTab to use real data
   const renderTasksTab = () => (

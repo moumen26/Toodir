@@ -324,7 +324,7 @@ const CreateProject = () => {
       setNewTagColor("#3B82F6");
       setShowTagModal(false);
     } catch (error) {
-      console.error('Error creating tag:', error);
+      console.log('Error creating tag:', error);
     } finally {
       setIsCreatingTag(false);
     }

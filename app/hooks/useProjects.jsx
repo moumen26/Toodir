@@ -121,7 +121,7 @@ export const useCreateProject = () => {
       }
     },
     onError: (error) => {
-      console.error("Error creating project:", error);
+      console.log("Error creating project:", error);
     },
   });
 };

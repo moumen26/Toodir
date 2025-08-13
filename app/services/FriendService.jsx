@@ -61,7 +61,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error searching users:', error);
+      console.log('Error searching users:', error);
       throw this.handleError(error);
     }
   }
@@ -79,7 +79,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error sending friend request:', error);
+      console.log('Error sending friend request:', error);
       throw this.handleError(error);
     }
   }
@@ -107,7 +107,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching received friend requests:', error);
+      console.log('Error fetching received friend requests:', error);
       throw this.handleError(error);
     }
   }
@@ -135,7 +135,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching sent friend requests:', error);
+      console.log('Error fetching sent friend requests:', error);
       throw this.handleError(error);
     }
   }
@@ -155,7 +155,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error responding to friend request:', error);
+      console.log('Error responding to friend request:', error);
       throw this.handleError(error);
     }
   }
@@ -171,7 +171,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error cancelling friend request:', error);
+      console.log('Error cancelling friend request:', error);
       throw this.handleError(error);
     }
   }
@@ -199,7 +199,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching friends:', error);
+      console.log('Error fetching friends:', error);
       throw this.handleError(error);
     }
   }
@@ -214,7 +214,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error removing friend:', error);
+      console.log('Error removing friend:', error);
       throw this.handleError(error);
     }
   }
@@ -232,7 +232,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error inviting friend to project:', error);
+      console.log('Error inviting friend to project:', error);
       throw this.handleError(error);
     }
   }
@@ -260,7 +260,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching received project invitations:', error);
+      console.log('Error fetching received project invitations:', error);
       throw this.handleError(error);
     }
   }
@@ -288,7 +288,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching sent project invitations:', error);
+      console.log('Error fetching sent project invitations:', error);
       throw this.handleError(error);
     }
   }
@@ -305,7 +305,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error responding to project invitation:', error);
+      console.log('Error responding to project invitation:', error);
       throw this.handleError(error);
     }
   }
@@ -320,7 +320,7 @@ class FriendService {
       
       return response;
     } catch (error) {
-      console.error('Error cancelling project invitation:', error);
+      console.log('Error cancelling project invitation:', error);
       throw this.handleError(error);
     }
   }
@@ -341,7 +341,7 @@ class FriendService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching friend statistics:', error);
+      console.log('Error fetching friend statistics:', error);
       throw this.handleError(error);
     }
   }

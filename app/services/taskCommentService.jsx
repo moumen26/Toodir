@@ -46,7 +46,7 @@ class TaskCommentService {
       
       return response;
     } catch (error) {
-      console.error('Error creating comment:', error);
+      console.log('Error creating comment:', error);
       throw this.handleError(error);
     }
   }
@@ -74,7 +74,7 @@ class TaskCommentService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching comments:', error);
+      console.log('Error fetching comments:', error);
       throw this.handleError(error);
     }
   }
@@ -95,7 +95,7 @@ class TaskCommentService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching comment:', error);
+      console.log('Error fetching comment:', error);
       throw this.handleError(error);
     }
   }
@@ -112,7 +112,7 @@ class TaskCommentService {
       
       return response;
     } catch (error) {
-      console.error('Error updating comment:', error);
+      console.log('Error updating comment:', error);
       throw this.handleError(error);
     }
   }
@@ -128,7 +128,7 @@ class TaskCommentService {
       
       return response;
     } catch (error) {
-      console.error('Error deleting comment:', error);
+      console.log('Error deleting comment:', error);
       throw this.handleError(error);
     }
   }
@@ -156,7 +156,7 @@ class TaskCommentService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching comment replies:', error);
+      console.log('Error fetching comment replies:', error);
       throw this.handleError(error);
     }
   }
@@ -177,7 +177,7 @@ class TaskCommentService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching comment stats:', error);
+      console.log('Error fetching comment stats:', error);
       throw this.handleError(error);
     }
   }

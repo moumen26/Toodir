@@ -67,7 +67,7 @@ export const useSendFriendRequest = () => {
       queryClient.invalidateQueries({ queryKey: friendKeys.search() });
     },
     onError: (error) => {
-      console.error("Error sending friend request:", error);
+      console.log("Error sending friend request:", error);
     },
   });
 };
@@ -129,7 +129,7 @@ export const useRespondToFriendRequest = () => {
       }
     },
     onError: (error) => {
-      console.error("Error responding to friend request:", error);
+      console.log("Error responding to friend request:", error);
     },
   });
 };
@@ -146,7 +146,7 @@ export const useCancelFriendRequest = () => {
       queryClient.invalidateQueries({ queryKey: friendKeys.search() });
     },
     onError: (error) => {
-      console.error("Error cancelling friend request:", error);
+      console.log("Error cancelling friend request:", error);
     },
   });
 };
@@ -208,7 +208,7 @@ export const useProjectMemberInvitations = () => {
       });
     },
     onError: (error) => {
-      console.error("Error inviting friend to project:", error);
+      console.log("Error inviting friend to project:", error);
     },
   });
 

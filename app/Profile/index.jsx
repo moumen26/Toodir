@@ -9,6 +9,7 @@ import {
   Alert,
   Switch,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "expo-router";
@@ -21,6 +22,7 @@ const Profile = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const navigation = useNavigation();
 
@@ -126,17 +128,38 @@ const Profile = () => {
   ];
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
+    Alert.alert(
+      "Log Out", 
+      "Are you sure you want to log out? This will clear all your local data.", 
+      [
+        { 
+          text: "Cancel", 
+          style: "cancel" 
         },
-        disabled: isLoading,
-      },
-    ]);
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            setIsLoggingOut(true);
+            
+            try {
+              console.log('Starting logout process from Profile...');
+              
+              // Perform logout which triggers complete data clearing
+              await logout();
+              
+              console.log('Logout completed successfully');
+              setIsLoggingOut(false);
+            
+            } catch (error) {
+              console.log('Logout error:', error);
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderAvatar = (size = 80) => (
@@ -185,6 +208,7 @@ const Profile = () => {
           key={option.id}
           style={styles.menuItem}
           onPress={option.action}
+          disabled={isLoggingOut}
         >
           <View style={styles.menuItemLeft}>
             <View style={styles.menuItemIcon}>
@@ -219,6 +243,7 @@ const Profile = () => {
           onValueChange={setNotificationsEnabled}
           trackColor={{ false: "#F3F4F6", true: "#1C30A4" + "30" }}
           thumbColor={notificationsEnabled ? "#1C30A4" : "#9CA3AF"}
+          disabled={isLoggingOut}
         />
       </View>
 
@@ -234,6 +259,7 @@ const Profile = () => {
           onValueChange={setDarkModeEnabled}
           trackColor={{ false: "#F3F4F6", true: "#1C30A4" + "30" }}
           thumbColor={darkModeEnabled ? "#1C30A4" : "#9CA3AF"}
+          disabled={isLoggingOut}
         />
       </View>
 
@@ -249,10 +275,24 @@ const Profile = () => {
           onValueChange={setPrivacyMode}
           trackColor={{ false: "#F3F4F6", true: "#1C30A4" + "30" }}
           thumbColor={privacyMode ? "#1C30A4" : "#9CA3AF"}
+          disabled={isLoggingOut}
         />
       </View>
     </View>
   );
+
+  // Show loading overlay during logout
+  if (isLoggingOut) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#1C30A4" />
+          <Text style={styles.loadingText}>Logging out...</Text>
+          <Text style={styles.loadingSubText}>Please wait while we clear your data</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -262,6 +302,7 @@ const Profile = () => {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
+            disabled={isLoading}
           >
             <Ionicons name="chevron-back" size={24} color="#374151" />
           </TouchableOpacity>
@@ -273,6 +314,7 @@ const Profile = () => {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        scrollEnabled={!isLoading}
       >
         {/* Profile Card */}
         <View style={styles.profileCard}>
@@ -320,12 +362,25 @@ const Profile = () => {
         {/* Logout Section */}
         <View style={styles.menuSection}>
           <Text style={styles.menuSectionTitle}>Session</Text>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <TouchableOpacity 
+            style={[
+              styles.logoutButton,
+              (isLoading || isLoggingOut) && styles.logoutButtonDisabled
+            ]} 
+            onPress={handleLogout}
+            disabled={isLoading || isLoggingOut}
+          >
             <View style={styles.menuItemLeft}>
               <View style={[styles.menuItemIcon, styles.logoutIcon]}>
-                <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+                {isLoading || isLoggingOut ? (
+                  <ActivityIndicator size={20} color="#EF4444" />
+                ) : (
+                  <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+                )}
               </View>
-              <Text style={styles.logoutText}>Log Out</Text>
+              <Text style={styles.logoutText}>
+                {isLoading || isLoggingOut ? 'Logging Out...' : 'Log Out'}
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </TouchableOpacity>
@@ -572,6 +627,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FEE2E2",
   },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
   logoutIcon: {
     backgroundColor: "#FEE2E2",
     borderRadius: 6,
@@ -582,6 +640,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#EF4444",
   },
-});
+  loadingOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  loadingSubText: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 20,
+  }
+})
 
 export default Profile;

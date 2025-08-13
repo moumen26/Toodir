@@ -91,7 +91,7 @@ class ProjectService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching projects:', error);
+      console.log('Error fetching projects:', error);
       throw this.handleError(error);
     }
   }
@@ -112,7 +112,7 @@ class ProjectService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching project:', error);
+      console.log('Error fetching project:', error);
       throw this.handleError(error);
     }
   }
@@ -134,7 +134,7 @@ class ProjectService {
       
       return response;
     } catch (error) {
-      console.error('Error creating project:', error);
+      console.log('Error creating project:', error);
       throw this.handleError(error);
     }
   }
@@ -162,7 +162,7 @@ class ProjectService {
       
       return response;
     } catch (error) {
-      console.error('Error updating project:', error);
+      console.log('Error updating project:', error);
       throw this.handleError(error);
     }
   }
@@ -178,7 +178,7 @@ class ProjectService {
       
       return response;
     } catch (error) {
-      console.error('Error deleting project:', error);
+      console.log('Error deleting project:', error);
       throw this.handleError(error);
     }
   }
@@ -211,7 +211,7 @@ class ProjectService {
       
       return response;
     } catch (error) {
-      console.error('Error adding project images:', error);
+      console.log('Error adding project images:', error);
       throw this.handleError(error);
     }
   }
@@ -226,7 +226,7 @@ class ProjectService {
       
       return response;
     } catch (error) {
-      console.error('Error deleting project image:', error);
+      console.log('Error deleting project image:', error);
       throw this.handleError(error);
     }
   }
@@ -242,7 +242,7 @@ class ProjectService {
       
       return response;
     } catch (error) {
-      console.error('Error setting primary image:', error);
+      console.log('Error setting primary image:', error);
       throw this.handleError(error);
     }
   }
@@ -263,7 +263,7 @@ class ProjectService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching project stats:', error);
+      console.log('Error fetching project stats:', error);
       throw this.handleError(error);
     }
   }

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { useQueryClient } from "@tanstack/react-query";
+import taskService from "../services/taskService";
 
 const TaskContext = createContext();
 
@@ -29,7 +31,14 @@ const initialState = {
 const taskReducer = (state, action) => {
   switch (action.type) {
     case 'RESET_STATE':
-      return { ...initialState };
+      return {
+        ...initialState,
+        // Reset collections properly
+        selectedTasks: new Set(),
+        filters: { ...initialState.filters },
+        preferences: { ...initialState.preferences },
+        ui: { ...initialState.ui },
+      };
       
     case 'SET_SELECTED_TASK':
       return { ...state, selectedTask: action.payload };
@@ -177,16 +186,47 @@ const taskReducer = (state, action) => {
 
 export const TaskProvider = forwardRef(({ children }, ref) => {
   const [state, dispatch] = useReducer(taskReducer, initialState);
+  const queryClient = useQueryClient();
 
-  // Reset function for logout
+  // Enhanced reset function for complete cleanup
   const resetTaskState = useCallback(() => {
-    dispatch({ type: 'RESET_STATE' });
-  }, []);
+    console.log('Resetting Task context state...');
+    
+    try {
+      // 1. Reset local state
+      dispatch({ type: 'RESET_STATE' });
+      
+      // 2. Clear task-related queries from React Query
+      const taskQueries = [
+        'tasks',
+        'task',
+        'task-stats',
+        'task-comments',
+        'task-attachments',
+      ];
+      
+      taskQueries.forEach(queryKey => {
+        queryClient.removeQueries({ queryKey: [queryKey] });
+        queryClient.invalidateQueries({ queryKey: [queryKey] });
+      });
+      
+      // 3. Clear service cache
+      if (taskService.clearAllCache) {
+        taskService.clearAllCache();
+      }
+      
+      console.log('Task context reset completed successfully');
+    } catch (error) {
+      console.log('Error resetting Task context:', error);
+      // Force state reset even if cleanup fails
+      dispatch({ type: 'RESET_STATE' });
+    }
+  }, [queryClient]);
 
   // Expose reset function via ref
   useImperativeHandle(ref, () => ({
     reset: resetTaskState,
-  }));
+  }), [resetTaskState]);
 
   // Memoized actions
   const setSelectedTask = useCallback((task) => {

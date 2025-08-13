@@ -16,6 +16,41 @@ const apiClient = axios.create({
   },
 });
 
+// Cache for request/response data
+const requestCache = new Map();
+const cacheTimestamps = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Helper functions for cache management
+const isCacheValid = (key) => {
+  const timestamp = cacheTimestamps.get(key);
+  return timestamp && (Date.now() - timestamp) < CACHE_DURATION;
+};
+
+const setCache = (key, data) => {
+  requestCache.set(key, data);
+  cacheTimestamps.set(key, Date.now());
+};
+
+const getCache = (key) => {
+  if (isCacheValid(key)) {
+    return requestCache.get(key);
+  }
+  clearCacheEntry(key);
+  return null;
+};
+
+const clearCacheEntry = (key) => {
+  requestCache.delete(key);
+  cacheTimestamps.delete(key);
+};
+
+const clearAllCache = () => {
+  requestCache.clear();
+  cacheTimestamps.clear();
+  console.log('Auth service cache cleared');
+};
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   async (config) => {
@@ -25,7 +60,7 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('Error getting token for request:', error);
+      console.log('Error getting token for request:', error);
     }
     return config;
   },
@@ -36,10 +71,18 @@ apiClient.interceptors.request.use(
 
 // Response interceptor to handle auth errors
 apiClient.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    // Cache successful responses for certain endpoints
+    const { url, method } = response.config;
+    if (method === 'GET' && url && !url.includes('auth')) {
+      const cacheKey = `${method}_${url}`;
+      setCache(cacheKey, response.data);
+    }
+    
+    return response.data;
+  },
   async (error) => {
     const originalRequest = error.config;
-    // console.log(error.response);
     
     // Handle 401 errors (unauthorized)
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -47,16 +90,22 @@ apiClient.interceptors.response.use(
       
       try {
         // Clear stored auth data
-        await Promise.all([
+        await Promise.allSettled([
           SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN),
           AsyncStorage.removeItem(STORAGE_KEYS.USER),
         ]);
         
+        // Clear all caches
+        clearAllCache();
+        
+        // Clear global state
+        global.isLoggedIn = false;
+        delete global.userData;
+        
         // Redirect to login - this would need to be handled by the auth context
-        // For now, we'll just reject the promise
         return Promise.reject(new Error('Authentication expired'));
       } catch (clearError) {
-        console.error('Error clearing auth data:', clearError);
+        console.log('Error clearing auth data:', clearError);
       }
     }
 
@@ -90,9 +139,18 @@ apiClient.interceptors.response.use(
 );
 
 const authService = {
+  // Cache management methods
+  clearCache: clearAllCache,
+  clearCacheEntry,
+  getCache,
+  setCache,
+
   // Login user
   login: async (credentials) => {
     try {
+      // Clear any existing cache before login
+      clearAllCache();
+      
       const response = await apiClient.post('/auth/login', credentials);
       return response;
     } catch (error) {
@@ -117,6 +175,9 @@ const authService = {
     } catch (error) {
       // Continue with local logout even if API call fails
       console.log('Logout API error:', error);
+    } finally {
+      // Always clear cache on logout
+      clearAllCache();
     }
   },
 
@@ -126,6 +187,8 @@ const authService = {
       const response = await apiClient.post('/auth/refresh');
       return response;
     } catch (error) {
+      // Clear cache if refresh fails
+      clearAllCache();
       throw error;
     }
   },
@@ -162,7 +225,63 @@ const authService = {
       throw error;
     }
   },
+
+  // Get cached user profile
+  getCachedProfile: () => {
+    return getCache('GET_/auth/profile');
+  },
+
+  // Clear all authentication related data
+  clearAllAuthData: async () => {
+    try {
+      // Clear all caches
+      clearAllCache();
+      
+      // Clear storage
+      await Promise.allSettled([
+        SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN),
+        AsyncStorage.removeItem(STORAGE_KEYS.USER),
+        AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME),
+        AsyncStorage.removeItem(STORAGE_KEYS.BIOMETRIC_ENABLED),
+      ]);
+      
+      // Clear global state
+      global.isLoggedIn = false;
+      delete global.userData;
+      
+      console.log('All auth data cleared from service');
+    } catch (error) {
+      console.log('Error clearing auth data from service:', error);
+    }
+  },
+
+  // Health check method
+  healthCheck: async () => {
+    try {
+      const cacheKey = 'GET_/health';
+      const cached = getCache(cacheKey);
+      
+      if (cached) {
+        return cached;
+      }
+      
+      const response = await apiClient.get('/health');
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Get cache stats for debugging
+  getCacheStats: () => {
+    return {
+      cacheSize: requestCache.size,
+      cacheKeys: Array.from(requestCache.keys()),
+      oldestEntry: Math.min(...Array.from(cacheTimestamps.values())),
+      newestEntry: Math.max(...Array.from(cacheTimestamps.values())),
+    };
+  },
 };
 
 export default authService;
-export { apiClient };
+export { apiClient, clearAllCache };

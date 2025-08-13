@@ -89,7 +89,7 @@ class TaskService {
       
       return response;
     } catch (error) {
-      console.error('Error creating task:', error);
+      console.log('Error creating task:', error);
       throw this.handleError(error);
     }
   }
@@ -117,7 +117,7 @@ class TaskService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching tasks by project:', error);
+      console.log('Error fetching tasks by project:', error);
       throw this.handleError(error);
     }
   }
@@ -145,7 +145,7 @@ class TaskService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching user tasks:', error);
+      console.log('Error fetching user tasks:', error);
       throw this.handleError(error);
     }
   }
@@ -166,7 +166,7 @@ class TaskService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching task:', error);
+      console.log('Error fetching task:', error);
       throw this.handleError(error);
     }
   }
@@ -194,7 +194,7 @@ class TaskService {
       
       return response;
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.log('Error updating task:', error);
       throw this.handleError(error);
     }
   }
@@ -210,7 +210,7 @@ class TaskService {
       
       return response;
     } catch (error) {
-      console.error('Error deleting task:', error);
+      console.log('Error deleting task:', error);
       throw this.handleError(error);
     }
   }
@@ -227,7 +227,7 @@ class TaskService {
       
       return response;
     } catch (error) {
-      console.error('Error assigning user to task:', error);
+      console.log('Error assigning user to task:', error);
       throw this.handleError(error);
     }
   }
@@ -242,7 +242,7 @@ class TaskService {
       
       return response;
     } catch (error) {
-      console.error('Error unassigning user from task:', error);
+      console.log('Error unassigning user from task:', error);
       throw this.handleError(error);
     }
   }
@@ -264,7 +264,7 @@ class TaskService {
       this.setCache(cacheKey, response);
       return response;
     } catch (error) {
-      console.error('Error fetching task stats:', error);
+      console.log('Error fetching task stats:', error);
       throw this.handleError(error);
     }
   }

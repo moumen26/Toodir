@@ -22,7 +22,7 @@ const CreateTask = () => {
   const { user } = useAuthStatus();
   const createTaskMutation = useCreateTask();
   const { projects } = useProjects();
-
+  
   const availableProjects = projects || [];
 
   const [formData, setFormData] = useState({
@@ -48,31 +48,6 @@ const CreateTask = () => {
       endDate: "",
     },
   });
-
-  // Mock uploaded files for demonstration
-  const [mockFiles] = useState([
-    {
-      id: 1,
-      name: "Task_Requirements.pdf",
-      size: 1456789,
-      type: "application/pdf",
-    },
-    {
-      id: 2,
-      name: "Design_Reference.png",
-      size: 2345678,
-      type: "image/png",
-      uri: "https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=400",
-    },
-    {
-      id: 3,
-      name: "Specifications.docx",
-      size: 987654,
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-  ]);
-
-  const [showMockFiles, setShowMockFiles] = useState(false);
 
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -129,51 +104,6 @@ const CreateTask = () => {
     { id: 10, name: "rocket", label: "Rocket" },
     { id: 11, name: "bulb", label: "Idea" },
     { id: 12, name: "code-slash", label: "Code" },
-  ];
-
-  const teamMembers = [
-    {
-      id: 1,
-      name: "John Doe",
-      role: "Lead Developer",
-      email: "john@company.com",
-      avatar: null,
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      role: "UI/UX Designer",
-      email: "jane@company.com",
-      avatar: null,
-    },
-    {
-      id: 3,
-      name: "Mike Johnson",
-      role: "Backend Developer",
-      email: "mike@company.com",
-      avatar: null,
-    },
-    {
-      id: 4,
-      name: "Sarah Wilson",
-      role: "QA Tester",
-      email: "sarah@company.com",
-      avatar: null,
-    },
-    {
-      id: 5,
-      name: "Alex Chen",
-      role: "DevOps Engineer",
-      email: "alex@company.com",
-      avatar: null,
-    },
-    {
-      id: 6,
-      name: "Emma Davis",
-      role: "Product Manager",
-      email: "emma@company.com",
-      avatar: null,
-    },
   ];
 
   const priorities = [
@@ -293,7 +223,7 @@ const CreateTask = () => {
               ).filter(index => index !== -1) // Remove any invalid days
             : null
           : null,
-        assigned_users: selectedMembers.map(member => member.id) || [],
+        assigned_users: selectedMembers.map(member => member.id),
       };
 
       await createTaskMutation.mutateAsync({
@@ -429,7 +359,7 @@ const CreateTask = () => {
     }
 
     setSelectedMembers(newSelectedMembers);
-    handleInputChange("assignedTo", newSelectedMembers);
+    handleInputChange("members", newSelectedMembers);
   };
 
   const handlePrioritySelect = (priority) => {
@@ -477,14 +407,6 @@ const CreateTask = () => {
 
     return summary;
   };
-
-  // Filter members based on search query
-  const filteredMembers = teamMembers.filter(
-    (member) =>
-      member.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-      member.role.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(memberSearchQuery.toLowerCase())
-  );
 
   const getCurrentDateData = () => {
     if (activeSelector === "day") return days;
@@ -545,13 +467,13 @@ const CreateTask = () => {
   const renderAvatar = (member, size = 32) => (
     <View
       style={[
-        styles.avatar,
+        styles.profile_picture,
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      {member.avatar ? (
+      {member.profile_picture ? (
         <Image
-          source={{ uri: member.avatar }}
+          source={{ uri: member.profile_picture }}
           style={[
             styles.avatarImage,
             { width: size, height: size, borderRadius: size / 2 },
@@ -640,8 +562,8 @@ const CreateTask = () => {
         )}
 
         {/* Members */}
-        {renderFormSection(
-          "Assign To",
+        {formData?.project_id && renderFormSection(
+          "Members",
           <View>
             <View style={styles.inputContainer}>
               <TouchableOpacity
@@ -671,7 +593,7 @@ const CreateTask = () => {
               <View style={styles.selectedMembersContainer}>
                 <View style={styles.selectedMembersHeader}>
                   <Text style={styles.selectedMembersTitle}>
-                    Assigned Members ({selectedMembers.length})
+                    Team Members ({selectedMembers.length})
                   </Text>
                   <TouchableOpacity
                     style={styles.editMembersButton}
@@ -717,10 +639,7 @@ const CreateTask = () => {
                       </View>
                       <View style={styles.memberCardContent}>
                         <Text style={styles.memberCardName} numberOfLines={1}>
-                          {member.name}
-                        </Text>
-                        <Text style={styles.memberCardRole} numberOfLines={1}>
-                          {member.role}
+                          {member.full_name}
                         </Text>
                       </View>
                     </View>
@@ -1444,9 +1363,9 @@ const CreateTask = () => {
             onPress={() => {}}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Team Members</Text>
+              <Text style={styles.modalTitle}>Select Team Members</Text>
               <Text style={styles.modalSubtitle}>
-                {selectedMembers.length} of {teamMembers.length} selected
+                {selectedMembers?.length} of {availableProjects.find(p => p.id == formData.project_id)?.members?.length} selected
               </Text>
             </View>
 
@@ -1476,55 +1395,82 @@ const CreateTask = () => {
               style={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {filteredMembers.map((member) => {
-                const isSelected = selectedMembers.find(
-                  (m) => m.id === member.id
-                );
-                return (
-                  <TouchableOpacity
-                    key={member.id}
-                    style={[
-                      styles.memberItem,
-                      isSelected && styles.selectedMemberItem,
-                    ]}
-                    onPress={() => handleMemberToggle(member)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.memberInfo}>
-                      {renderAvatar(member, 40)}
-                      <View style={styles.memberDetails}>
-                        <Text
-                          style={[
-                            styles.memberName,
-                            isSelected && styles.selectedMemberName,
-                          ]}
-                        >
-                          {member.name}
-                        </Text>
-                        <Text style={styles.memberRole}>{member.role}</Text>
-                        <Text style={styles.memberEmail}>{member.email}</Text>
-                      </View>
+              {(() => {
+                // Find project only once
+                const project = availableProjects.find(p => p.id == formData.project_id);
+
+                // Safely get members array
+                let members = project?.members ? [...project.members] : [];
+
+                // Add owner if available and not already in members
+                if (project?.owner && !members.some(m => m.id === project.owner.id)) {
+                  members.push(project.owner);
+                }
+
+                // Check if there are no members
+                if (members.length === 0) {
+                  return (
+                    <View style={styles.noResultsContainer}>
+                      <Ionicons name="people" size={48} color="#D1D5DB" />
+                      <Text style={styles.noResultsText}>
+                        No members available in that project
+                      </Text>
+                      <Text style={styles.noResultsSubtext}>
+                        {memberSearchQuery
+                          ? "Try adjusting your search terms"
+                          : "Add some members to that project to have the ability to assign them to this project's tasks"}
+                      </Text>
                     </View>
-                    <View
-                      style={[styles.checkbox, isSelected && styles.checkedBox]}
+                  );
+                }
+
+                // Render members list
+                return members.map((member) => {
+                  const isSelected = selectedMembers.some((m) => m.id === member.id);
+                  return (
+                    <TouchableOpacity
+                      key={member.id}
+                      style={[
+                        styles.memberItem,
+                        isSelected && styles.selectedMemberItem,
+                      ]}
+                      onPress={() => handleMemberToggle(member)}
+                      activeOpacity={0.7}
                     >
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-              {filteredMembers.length === 0 && (
-                <View style={styles.noResultsContainer}>
-                  <Ionicons name="search" size={48} color="#D1D5DB" />
-                  <Text style={styles.noResultsText}>No members found</Text>
-                  <Text style={styles.noResultsSubtext}>
-                    Try adjusting your search terms
-                  </Text>
-                </View>
-              )}
+                      <View style={styles.memberInfo}>
+                        {member.profile_picture ? (
+                          <Image
+                            source={{ uri: member.profile_picture }}
+                            style={styles.memberAvatar}
+                          />
+                        ) : (
+                          renderAvatar(member, 40)
+                        )}
+                        <View style={styles.memberDetails}>
+                          <Text
+                            style={[
+                              styles.memberName,
+                              isSelected && styles.selectedMemberName,
+                            ]}
+                          >
+                            {member.full_name}
+                          </Text>
+                          <Text style={styles.memberEmail}>{member.email}</Text>
+                        </View>
+                      </View>
+                      <View
+                        style={[styles.checkbox, isSelected && styles.checkedBox]}
+                      >
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
             </ScrollView>
+
 
             <View style={styles.membersModalButtons}>
               <TouchableOpacity

@@ -26,7 +26,7 @@ class TokenManager {
       this.token = token;
       return true;
     } catch (error) {
-      console.error('Error storing token:', error);
+      console.log('Error storing token:', error);
       throw error;
     }
   }
@@ -42,10 +42,10 @@ class TokenManager {
       if (token) {
         this.token = token;
       }
-      
+
       return token;
     } catch (error) {
-      console.error('Error retrieving token:', error);
+      console.log('Error retrieving token:', error);
       return null;
     }
   }
@@ -57,7 +57,7 @@ class TokenManager {
       this.token = null;
       return true;
     } catch (error) {
-      console.error('Error removing token:', error);
+      console.log('Error removing token:', error);
       return false;
     }
   }
@@ -70,7 +70,7 @@ class TokenManager {
 
       return jwtDecode(tokenToUse);
     } catch (error) {
-      console.error('Error decoding token:', error);
+      console.log('Error decoding token:', error);
       return null;
     }
   }
@@ -84,7 +84,7 @@ class TokenManager {
       const currentTime = Date.now() / 1000;
       return decoded.exp > (currentTime + bufferTime);
     } catch (error) {
-      console.error('Error validating token:', error);
+      console.log('Error validating token:', error);
       return false;
     }
   }
@@ -97,7 +97,7 @@ class TokenManager {
 
       return new Date(decoded.exp * 1000);
     } catch (error) {
-      console.error('Error getting token expiry:', error);
+      console.log('Error getting token expiry:', error);
       return null;
     }
   }
@@ -110,10 +110,10 @@ class TokenManager {
 
       const currentTime = Date.now() / 1000;
       const timeUntilExpiry = decoded.exp - currentTime;
-      
+
       return Math.max(0, timeUntilExpiry);
     } catch (error) {
-      console.error('Error calculating time until expiry:', error);
+      console.log('Error calculating time until expiry:', error);
       return 0;
     }
   }
@@ -124,7 +124,7 @@ class TokenManager {
       const decoded = this.decodeToken(token);
       return decoded?.id || decoded?.sub || decoded?.userId || null;
     } catch (error) {
-      console.error('Error getting user ID from token:', error);
+      console.log('Error getting user ID from token:', error);
       return null;
     }
   }
@@ -135,7 +135,7 @@ class TokenManager {
       const decoded = this.decodeToken(token);
       return decoded?.role || decoded?.roles || null;
     } catch (error) {
-      console.error('Error getting user role from token:', error);
+      console.log('Error getting user role from token:', error);
       return null;
     }
   }
@@ -147,14 +147,14 @@ class TokenManager {
       if (timeUntilExpiry <= bufferTime) return null;
 
       const refreshTime = (timeUntilExpiry - bufferTime) * 1000; // Convert to milliseconds
-      
+
       return setTimeout(() => {
         if (refreshCallback && typeof refreshCallback === 'function') {
           refreshCallback();
         }
       }, refreshTime);
     } catch (error) {
-      console.error('Error scheduling token refresh:', error);
+      console.log('Error scheduling token refresh:', error);
       return null;
     }
   }
@@ -167,12 +167,12 @@ class TokenManager {
         AsyncStorage.removeItem(STORAGE_KEYS.USER),
         AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME),
       ]);
-      
+
       this.token = null;
       this.refreshPromise = null;
       return true;
     } catch (error) {
-      console.error('Error clearing auth data:', error);
+      console.log('Error clearing auth data:', error);
       return false;
     }
   }
@@ -187,7 +187,7 @@ class TokenManager {
 
       this.refreshPromise = this._performTokenRefresh(refreshCallback);
       const result = await this.refreshPromise;
-      
+
       this.refreshPromise = null;
       return result;
     } catch (error) {
@@ -209,7 +209,7 @@ class TokenManager {
 
       // Call the refresh callback (usually an API call)
       const newToken = await refreshCallback(currentToken);
-      
+
       if (!newToken) {
         throw new Error('Failed to refresh token');
       }
@@ -218,7 +218,7 @@ class TokenManager {
       await this.setToken(newToken);
       return newToken;
     } catch (error) {
-      console.error('Error refreshing token:', error);
+      console.log('Error refreshing token:', error);
       // Clear invalid token
       await this.clearAllAuthData();
       throw error;
@@ -231,7 +231,7 @@ class TokenManager {
       const timeUntilExpiry = this.getTimeUntilExpiry();
       return timeUntilExpiry <= bufferTime && timeUntilExpiry > 0;
     } catch (error) {
-      console.error('Error checking if token needs refresh:', error);
+      console.log('Error checking if token needs refresh:', error);
       return false;
     }
   }
@@ -241,7 +241,7 @@ class TokenManager {
     try {
       return this.decodeToken(token);
     } catch (error) {
-      console.error('Error getting token claims:', error);
+      console.log('Error getting token claims:', error);
       return null;
     }
   }
@@ -250,10 +250,10 @@ class TokenManager {
   isValidTokenFormat(token) {
     try {
       if (!token || typeof token !== 'string') return false;
-      
+
       const parts = token.split('.');
       if (parts.length !== 3) return false;
-      
+
       // Try to decode each part
       const decoded = this.decodeToken(token);
       return decoded !== null;
@@ -272,7 +272,7 @@ class TokenManager {
   async performSecurityCheck() {
     try {
       const storedToken = await this.getToken();
-      
+
       if (!storedToken) {
         return { isSecure: false, reason: 'No token found' };
       }
@@ -290,7 +290,7 @@ class TokenManager {
 
       return { isSecure: true, reason: 'Token is valid' };
     } catch (error) {
-      console.error('Security check failed:', error);
+      console.log('Security check failed:', error);
       return { isSecure: false, reason: 'Security check failed' };
     }
   }
@@ -313,7 +313,7 @@ class TokenManager {
         needsRefresh: this.needsRefresh(),
       };
     } catch (error) {
-      console.error('Error getting token metadata:', error);
+      console.log('Error getting token metadata:', error);
       return null;
     }
   }

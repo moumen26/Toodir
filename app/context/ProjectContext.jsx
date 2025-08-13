@@ -76,7 +76,15 @@ const initialState = {
 const projectReducer = (state, action) => {
   switch (action.type) {
     case PROJECT_ACTIONS.RESET_STATE:
-      return { ...initialState };
+      return { 
+        ...initialState,
+        // Reset collections properly
+        selectedProjects: new Set(),
+        filters: { ...initialState.filters },
+        pagination: { ...initialState.pagination },
+        cache: { ...initialState.cache },
+        performance: { ...initialState.performance },
+      };
     
     case PROJECT_ACTIONS.SET_LOADING:
       return {
@@ -291,23 +299,64 @@ const createSelectors = (state) => ({
 });
 
 // Context Provider Component
-export const ProjectProvider = ({ children }, ref) => {
+export const ProjectProvider = forwardRef(({ children }, ref) => {
   const [state, dispatch] = useReducer(projectReducer, initialState);
   const [batchedState, batchUpdate] = useBatchedState({});
 
   const queryClient = useQueryClient();
 
-  // Reset function
+  // Enhanced reset function for complete cleanup
   const resetProjectState = useCallback(() => {
-    dispatch({ type: PROJECT_ACTIONS.RESET_STATE });
-    // Clear project-related queries
-    queryClient.removeQueries({ queryKey: ['projects'] });
-    projectService.clearAllCache?.();
+    console.log('Resetting Project context state...');
+    
+    try {
+      // 1. Reset local state
+      dispatch({ type: PROJECT_ACTIONS.RESET_STATE });
+      
+      // 2. Clear project-related queries from React Query
+      const projectQueries = [
+        'projects',
+        'project',
+        'project-stats',
+        'project-members',
+        'project-tags',
+      ];
+      
+      projectQueries.forEach(queryKey => {
+        queryClient.removeQueries({ queryKey: [queryKey] });
+        queryClient.invalidateQueries({ queryKey: [queryKey] });
+      });
+      
+      // 3. Clear service cache
+      if (projectService.clearAllCache) {
+        projectService.clearAllCache();
+      }
+      
+      // 4. Clear any refs
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      
+      if (operationQueueRef.current) {
+        operationQueueRef.current = [];
+      }
+      
+      // 5. Reset performance tracking
+      lastFetchRef.current = 0;
+      
+      console.log('Project context reset completed successfully');
+    } catch (error) {
+      console.log('Error resetting Project context:', error);
+      // Force state reset even if cleanup fails
+      dispatch({ type: PROJECT_ACTIONS.RESET_STATE });
+    }
   }, [queryClient]);
 
+  // Expose reset function via ref
   useImperativeHandle(ref, () => ({
     reset: resetProjectState,
-  }));
+  }), [resetProjectState]);
   
   const { runAfterInteractions } = useInteractionManager();
   const memoryPressure = useMemoryPressure();
@@ -552,7 +601,7 @@ export const ProjectProvider = ({ children }, ref) => {
   // Auto-refresh based on app state
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!state.loading) {
+      if (!state.loading && global.isLoggedIn) {
         fetchProjects();
       }
     }, 300000); // 5 minutes
@@ -626,6 +675,7 @@ export const ProjectProvider = ({ children }, ref) => {
         memoryPressure,
       },
 
+      // Reset function
       resetProjectState,
     }),
     [
@@ -646,7 +696,7 @@ export const ProjectProvider = ({ children }, ref) => {
       {children}
     </ProjectContext.Provider>
   );
-};
+});
 
 // Custom hook to use project context
 export const useProjectContext = () => {

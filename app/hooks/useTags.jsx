@@ -80,7 +80,7 @@ export const useCreateTag = () => {
       }
     },
     onError: (error) => {
-      console.error("Error creating tag:", error);
+      console.log("Error creating tag:", error);
     },
   });
 };
