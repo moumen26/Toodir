@@ -203,20 +203,20 @@ const ProjectCard = memo(({
         </Text>
       )}
 
-      {item.end_date &&
-        <View style={styles.projectInfo}>
-          <View style={styles.projectInfoItem}>
-            <Ionicons name="person-outline" size={14} color="#6B7280" />
-            <Text style={styles.projectInfoText}>{item.owner?.full_name}</Text>
-          </View>
+      <View style={styles.projectInfo}>
+        <View style={styles.projectInfoItem}>
+          <Ionicons name="person-outline" size={14} color="#6B7280" />
+          <Text style={styles.projectInfoText}>{item.owner?.full_name}</Text>
+        </View>
+        {item.end_date &&
           <View style={styles.projectInfoItem}>
             <Ionicons name="calendar-outline" size={14} color="#6B7280" />
             <Text style={styles.projectInfoText}>
               {new Date(item.end_date).toLocaleDateString()}
             </Text>
           </View>
-        </View>
-      }
+        }
+      </View>
 
       <View style={styles.projectStats}>
         <View style={styles.projectTeam}>

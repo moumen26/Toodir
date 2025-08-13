@@ -1,3 +1,5 @@
+// Enhanced AuthContext.jsx with complete data clearing
+
 import React, { createContext, useReducer, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from '@react-navigation/native';
@@ -92,15 +94,47 @@ export const AuthContextProvider = ({ children }) => {
     }
   };
 
+  // Enhanced clear auth data function
   const clearAuthData = async () => {
     try {
+      // Clear all auth-related storage
       await Promise.all([
-        SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN),
-        AsyncStorage.removeItem(STORAGE_KEYS.USER),
-        AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME),
+        // Secure store items
+        SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN).catch(() => {}),
+        
+        // AsyncStorage items
+        AsyncStorage.removeItem(STORAGE_KEYS.USER).catch(() => {}),
+        AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME).catch(() => {}),
+        AsyncStorage.removeItem(STORAGE_KEYS.BIOMETRIC_ENABLED).catch(() => {}),
+        AsyncStorage.removeItem(STORAGE_KEYS.THEME).catch(() => {}),
+        AsyncStorage.removeItem(STORAGE_KEYS.LANGUAGE).catch(() => {}),
+        
+        // Clear all AsyncStorage keys that might contain user data
+        AsyncStorage.multiRemove([
+          'user_preferences',
+          'cached_projects',
+          'cached_tasks',
+          'recent_activities',
+          'notification_settings',
+          'draft_data',
+          'temp_uploads',
+        ]).catch(() => {}),
       ]);
+
+      // Clear the entire AsyncStorage if needed (be careful with this)
+      // await AsyncStorage.clear();
+      
     } catch (error) {
       console.error('Error clearing auth data:', error);
+    }
+  };
+
+  // Get global data clearers from context (will be injected)
+  const clearAllContextData = () => {
+    // This will be called to clear all context states
+    // The actual implementation will be in the main provider wrapper
+    if (window.clearAllAppData) {
+      window.clearAllAppData();
     }
   };
 
@@ -163,22 +197,53 @@ export const AuthContextProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
+  // Enhanced logout function with complete data clearing
+  const logout = async (skipApiCall = false) => {
     try {
       dispatch({ type: "SET_LOADING", payload: true });
       
-      // Clear auth data
-      await clearAuthData();
+      // Call logout API unless explicitly skipped (for token expiry cases)
+      if (!skipApiCall) {
+        try {
+          await authService.logout();
+        } catch (error) {
+          console.warn('Logout API call failed:', error);
+          // Continue with local cleanup even if API fails
+        }
+      }
       
-      // Dispatch logout action
-      dispatch({ type: "LOGOUT" });
+      // Clear all app data
+      await clearAllAppData();
       
-      // Navigate to login screen
-      router.dismissAll();
-      router.replace("/SignIn");
     } catch (error) {
       console.error("Error during logout:", error);
-      // Force logout even if there's an error
+      // Force cleanup even if there's an error
+      await clearAllAppData();
+    }
+  };
+
+  // Complete app data clearing function
+  const clearAllAppData = async () => {
+    try {
+      // 1. Clear authentication data
+      await clearAuthData();
+      
+      // 2. Clear context states
+      clearAllContextData();
+      
+      // 3. Clear any service caches
+      if (authService.clearCache) authService.clearCache();
+      
+      // 4. Dispatch logout action to reset auth state
+      dispatch({ type: "LOGOUT" });
+      
+      // 5. Navigate to login screen
+      router.dismissAll();
+      router.replace("/SignIn");
+      
+    } catch (error) {
+      console.error("Error during complete data clearing:", error);
+      // Ensure we still reset state and navigate
       dispatch({ type: "LOGOUT" });
       router.dismissAll();
       router.replace("/SignIn");
@@ -198,13 +263,12 @@ export const AuthContextProvider = ({ children }) => {
         return token;
       }
 
-      // If token is expired, attempt refresh (if your API supports it)
-      // For now, we'll logout the user
-      await logout();
+      // If token is expired, logout user
+      await logout(true); // Skip API call since token is expired
       throw new Error('Token expired');
     } catch (error) {
       console.error('Token refresh error:', error);
-      await logout();
+      await logout(true);
       throw error;
     }
   };
@@ -223,14 +287,12 @@ export const AuthContextProvider = ({ children }) => {
 
         // If no remember me preference and no token, logout
         if (!rememberMe && !token) {
-          dispatch({ type: "LOGOUT" });
-          router.replace("/SignIn");
+          await clearAllAppData();
           return;
         }
 
         if (!token || !userData) {
-          dispatch({ type: "LOGOUT" });
-          router.replace("/SignIn");
+          await clearAllAppData();
           return;
         }
 
@@ -245,16 +307,12 @@ export const AuthContextProvider = ({ children }) => {
           
           router.replace("/(tabs)/home");
         } else {
-          // Token expired, clear data and redirect
-          await clearAuthData();
-          dispatch({ type: "LOGOUT" });
-          router.replace("/SignIn");
+          // Token expired, clear everything
+          await clearAllAppData();
         }
       } catch (error) {
         console.error("Error during auth initialization:", error);
-        await clearAuthData();
-        dispatch({ type: "LOGOUT" });
-        router.replace("/SignIn");
+        await clearAllAppData();
       }
     };
 
@@ -269,6 +327,7 @@ export const AuthContextProvider = ({ children }) => {
     refreshToken,
     clearError: () => dispatch({ type: "CLEAR_ERROR" }),
     updateUser: (userData) => dispatch({ type: "UPDATE_USER", payload: userData }),
+    clearAllAppData, // Expose for external use
   };
 
   return (

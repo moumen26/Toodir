@@ -116,7 +116,7 @@ const authService = {
       await apiClient.post('/auth/logout');
     } catch (error) {
       // Continue with local logout even if API call fails
-      console.error('Logout API error:', error);
+      console.log('Logout API error:', error);
     }
   },
 

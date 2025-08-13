@@ -1,11 +1,10 @@
-// hooks/useTasks.js
 import {
   useQuery,
   useMutation,
   useQueryClient,
   useInfiniteQuery,
 } from "@tanstack/react-query";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import taskService from "../services/taskService";
 import { useDebounce } from "../util/performance";
 
@@ -361,6 +360,11 @@ export const useTaskFilters = (tasks, filters = {}) => {
       filtered = filtered.filter(task => task.priority === filters.priority);
     }
 
+    // Filter by status
+    if (filters.status && filters.status !== 'all') {
+      filtered = filtered.filter(task => task.status === filters.status);
+    }
+
     // Filter by project
     if (filters.projectId) {
       filtered = filtered.filter(task => task.project_id === filters.projectId);
@@ -374,7 +378,7 @@ export const useTaskFilters = (tasks, filters = {}) => {
     }
 
     // Filter by search query
-    if (filters.search) {
+    if (filters.search && filters.search.trim()) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(task =>
         task.title.toLowerCase().includes(searchLower) ||
@@ -386,13 +390,13 @@ export const useTaskFilters = (tasks, filters = {}) => {
     // Filter by date range
     if (filters.startDate) {
       filtered = filtered.filter(task => 
-        new Date(task.start_date) >= new Date(filters.startDate)
+        task.start_date && new Date(task.start_date) >= new Date(filters.startDate)
       );
     }
 
     if (filters.endDate) {
       filtered = filtered.filter(task => 
-        new Date(task.end_date) <= new Date(filters.endDate)
+        task.end_date && new Date(task.end_date) <= new Date(filters.endDate)
       );
     }
 
@@ -408,11 +412,17 @@ export const useTaskFilters = (tasks, filters = {}) => {
             const priorityOrder = { high: 3, medium: 2, low: 1 };
             return direction * (priorityOrder[a.priority] - priorityOrder[b.priority]);
           case 'start_date':
+            if (!a.start_date && !b.start_date) return 0;
+            if (!a.start_date) return direction;
+            if (!b.start_date) return -direction;
             return direction * (new Date(a.start_date) - new Date(b.start_date));
           case 'end_date':
+            if (!a.end_date && !b.end_date) return 0;
+            if (!a.end_date) return direction;
+            if (!b.end_date) return -direction;
             return direction * (new Date(a.end_date) - new Date(b.end_date));
           case 'created_at':
-            return direction * (new Date(a.created_at) - new Date(b.created_at));
+            return direction * (new Date(a.created_at || a.createdAt) - new Date(b.created_at || b.createdAt));
           default:
             return 0;
         }
@@ -423,7 +433,15 @@ export const useTaskFilters = (tasks, filters = {}) => {
   }, [tasks, filters]);
 
   const taskStats = useMemo(() => {
-    if (!filteredTasks.length) return {};
+    if (!filteredTasks.length) {
+      return {
+        total: 0,
+        byStatus: {},
+        byPriority: {},
+        overdue: 0,
+        upcoming: 0,
+      };
+    }
 
     const stats = {
       total: filteredTasks.length,
@@ -439,18 +457,22 @@ export const useTaskFilters = (tasks, filters = {}) => {
 
     filteredTasks.forEach(task => {
       // Count by status
-      stats.byStatus[task.status] = (stats.byStatus[task.status] || 0) + 1;
+      if (task.status) {
+        stats.byStatus[task.status] = (stats.byStatus[task.status] || 0) + 1;
+      }
       
       // Count by priority
-      stats.byPriority[task.priority] = (stats.byPriority[task.priority] || 0) + 1;
+      if (task.priority) {
+        stats.byPriority[task.priority] = (stats.byPriority[task.priority] || 0) + 1;
+      }
       
       // Count overdue
-      if (new Date(task.end_date) < now) {
+      if (task.end_date && new Date(task.end_date) < now && task.status !== 'completed') {
         stats.overdue++;
       }
       
       // Count upcoming
-      if (new Date(task.start_date) <= upcoming && new Date(task.start_date) >= now) {
+      if (task.start_date && new Date(task.start_date) <= upcoming && new Date(task.start_date) >= now) {
         stats.upcoming++;
       }
     });

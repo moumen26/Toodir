@@ -7,6 +7,8 @@ import React, {
   useMemo,
   useRef,
   useEffect,
+  useImperativeHandle,
+  forwardRef,
 } from "react";
 import { Alert } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,7 +18,7 @@ import {
   useInteractionManager,
   useBatchedState,
   useMemoryPressure,
-} from "../util/performance";
+} from "../util/performance"; 
 
 // Action types
 const PROJECT_ACTIONS = {
@@ -35,6 +37,7 @@ const PROJECT_ACTIONS = {
   SET_VIEW_MODE: "SET_VIEW_MODE",
   UPDATE_PROJECT_CACHE: "UPDATE_PROJECT_CACHE",
   INVALIDATE_CACHE: "INVALIDATE_CACHE",
+  RESET_STATE: "RESET_STATE",
 };
 
 // Initial state
@@ -52,7 +55,7 @@ const initialState = {
     dateRange: null,
   },
   searchQuery: "",
-  viewMode: "grid", // 'grid' | 'list' | 'kanban'
+  viewMode: "grid",
   pagination: {
     page: 1,
     limit: 20,
@@ -72,6 +75,9 @@ const initialState = {
 // Optimized reducer with immutable updates
 const projectReducer = (state, action) => {
   switch (action.type) {
+    case PROJECT_ACTIONS.RESET_STATE:
+      return { ...initialState };
+    
     case PROJECT_ACTIONS.SET_LOADING:
       return {
         ...state,
@@ -285,11 +291,24 @@ const createSelectors = (state) => ({
 });
 
 // Context Provider Component
-export const ProjectProvider = ({ children }) => {
+export const ProjectProvider = ({ children }, ref) => {
   const [state, dispatch] = useReducer(projectReducer, initialState);
   const [batchedState, batchUpdate] = useBatchedState({});
 
   const queryClient = useQueryClient();
+
+  // Reset function
+  const resetProjectState = useCallback(() => {
+    dispatch({ type: PROJECT_ACTIONS.RESET_STATE });
+    // Clear project-related queries
+    queryClient.removeQueries({ queryKey: ['projects'] });
+    projectService.clearAllCache?.();
+  }, [queryClient]);
+
+  useImperativeHandle(ref, () => ({
+    reset: resetProjectState,
+  }));
+  
   const { runAfterInteractions } = useInteractionManager();
   const memoryPressure = useMemoryPressure();
 
@@ -606,6 +625,8 @@ export const ProjectProvider = ({ children }) => {
         cacheAge: Date.now() - (state.cache.lastUpdated || 0),
         memoryPressure,
       },
+
+      resetProjectState,
     }),
     [
       state,
@@ -616,6 +637,7 @@ export const ProjectProvider = ({ children }) => {
       deleteProjects,
       debouncedSearch,
       memoryPressure,
+      resetProjectState
     ]
   );
 

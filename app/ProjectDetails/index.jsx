@@ -78,13 +78,13 @@ const ProjectDetails = () => {
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>
-            {displayProject?.tasks.filter((t) => t.closed).length}/
-            {displayProject?.tasks.length}
+            {displayProject?.tasks?.filter((t) => t.closed).length}/
+            {displayProject?.tasks?.length}
           </Text>
           <Text style={styles.statLabel}>Tasks</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{displayProject?.members.length}</Text>
+          <Text style={styles.statNumber}>{displayProject?.members?.length}</Text>
           <Text style={styles.statLabel}>Team</Text>
         </View>
       </View>
@@ -133,24 +133,25 @@ const ProjectDetails = () => {
       {/* Rest remains the same but with real comment handling */}
     </View>
   );
-
+  console.log(displayProject);
+  
   // Update renderTasksTab to use real data
   const renderTasksTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Tasks ({displayProject?.tasks.length})</Text>
+        <Text style={styles.sectionTitle}>Tasks ({displayProject?.tasks?.length})</Text>
         <TouchableOpacity onPress={handleAddTask} style={styles.addTaskButton}>
           <Ionicons name="add" size={16} color="#1C30A4" />
           <Text style={styles.addTaskText}>Add</Text>
         </TouchableOpacity>
       </View>
 
-      {displayProject?.tasks.length === 0 ? (
+      {displayProject?.tasks?.length == 0 ? (
         <View style={styles.emptyState}>
           <Text>No tasks yet</Text>
         </View>
       ) : (
-        displayProject.tasks.map((task) => (         
+        displayProject?.tasks?.map((task) => (         
           <View key={task?.id} style={styles.taskCard}>
             <TouchableOpacity onPress={() => handleTaskPress(task)}>
               <View style={styles.taskHeader}>
@@ -209,13 +210,13 @@ const ProjectDetails = () => {
                         {task.assignedUsers[0]?.full_name || 'Unassigned'}
                       </Text>
                       {/* Show "more" button if there are additional users */}
-                      {task.assignedUsers && task.assignedUsers.length > 1 && (
+                      {task.assignedUsers && task.assignedUsers?.length > 1 && (
                         <TouchableOpacity 
                           onPress={() => toggleAssignedUsers(task.id)}
                           style={styles.moreButton}
                         >
                           <Text style={styles.moreButtonText}>
-                            {expandedAssignedUsers[task.id] ? 'less' : `+${task.assignedUsers.length - 1} more`}
+                            {expandedAssignedUsers[task.id] ? 'less' : `+${task.assignedUsers?.length - 1} more`}
                           </Text>
                         </TouchableOpacity>
                       )}
@@ -264,7 +265,7 @@ const ProjectDetails = () => {
           <View style={styles.loadingContainer}>
             <LoadingState />
           </View>
-        ) : comments && comments.length > 0 ? (
+        ) : comments && comments?.length > 0 ? (
           comments.map((comment) => (
             <View key={comment.id} style={styles.taskCommentCard}>
               <View style={styles.taskCommentHeader}>
@@ -326,7 +327,7 @@ const ProjectDetails = () => {
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>
-          Team Members ({displayProject?.members.length})
+          Team Members ({displayProject?.members?.length})
         </Text>
         <TouchableOpacity onPress={handleAddMembers} style={styles.addTaskButton}>
           <Ionicons name="add" size={16} color="#1C30A4" />
@@ -368,7 +369,7 @@ const ProjectDetails = () => {
         </TouchableOpacity>
       ))}
       
-      {displayProject.members.length === 0 && (
+      {displayProject.members?.length === 0 && (
         <View style={styles.emptyState}>
           <Text>No team members yet</Text>
         </View>
@@ -381,14 +382,14 @@ const ProjectDetails = () => {
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>
-          Project Files ({displayProject?.images.length})
+          Project Files ({displayProject?.images?.length})
         </Text>
         <TouchableOpacity onPress={handleAddFiles} style={styles.addTaskButton}>
           <Ionicons name="add" size={16} color="#1C30A4" />
           <Text style={styles.addTaskText}>Add</Text>
         </TouchableOpacity>
       </View>
-      {displayProject?.images.length > 0 ? (
+      {displayProject?.images?.length > 0 ? (
         displayProject?.images.map((file) => (
           <TouchableOpacity
             key={file.id}
@@ -559,23 +560,23 @@ const ProjectDetails = () => {
         </View>
         <View style={styles.projectInfo}>
           <Text style={styles.projectName}>{project.title}</Text>
-          {project?.tags && project.tags.length > 0 && (
+          {project?.tags && project?.tags?.length > 0 && (
             <View style={styles.tagsContainer}>
               {project.tags.slice(0, 2).map((tag) => (
                 <View
                   key={tag.id}
                   style={[
                     styles.tagChip,
-                    { backgroundColor: tag.color + "20" }
+                    { backgroundColor: tag?.color + "20" }
                   ]}
                 >
-                  <Text style={[styles.tagText, { color: tag.color }]}>
-                    {tag.name}
+                  <Text style={[styles.tagText, { color: tag?.color }]}>
+                    {tag?.name}
                   </Text>
                 </View>
               ))}
-              {project.tags.length > 2 && (
-                <Text style={styles.moreTagsText}>+{project.tags.length - 2}</Text>
+              {project?.tags?.length > 2 && (
+                <Text style={styles.moreTagsText}>+{project?.tags?.length - 2}</Text>
               )}
             </View>
           )}
@@ -583,13 +584,13 @@ const ProjectDetails = () => {
             <View
               style={[
                 styles.priorityBadge,
-                { backgroundColor: getPriorityColor(project.priority) + "20" },
+                { backgroundColor: getPriorityColor(project?.priority) + "20" },
               ]}
             >
               <View
                 style={[
                   styles.priorityDot,
-                  { backgroundColor: getPriorityColor(project.priority) },
+                  { backgroundColor: getPriorityColor(project?.priority) },
                 ]}
               />
               <Text

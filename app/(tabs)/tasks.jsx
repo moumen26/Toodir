@@ -14,10 +14,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
 import { useTasksByUser, useTaskStats, useTaskFilters, usePrefetchTask } from "../hooks/useTasks";
+import { useTaskContext } from "../context/TaskContext";
 import { useAuthStatus } from "../hooks/useAuth";
 import { RefreshControl } from 'react-native';
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
+import Constants from 'expo-constants';
+const FILES_URL = Constants.expoConfig?.extra?.filesUrl;
 
 // Optimized VirtualizedList for better performance than FlatList
 const OptimizedList = memo(({ 
@@ -104,13 +107,20 @@ const FilterChip = memo(({
 });
 
 const Tasks = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState("All");
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
   const listRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   const { user } = useAuthStatus();
+  
+  // Use TaskContext for state management
+  const { 
+    filters, 
+    setFilters, 
+    preferences, 
+    setPreferences 
+  } = useTaskContext();
+  
   const { 
     tasks: apiTasks, 
     pagination,
@@ -123,21 +133,21 @@ const Tasks = () => {
     fetchNextPage,
     isFetchingNextPage,
   } = useTasksByUser({
-    search: searchQuery.length >= 2 ? searchQuery : undefined,
-    priority: selectedFilter !== "All" ? selectedFilter.toLowerCase() : undefined,
+    search: filters.search && filters.search.length >= 2 ? filters.search : undefined,
+    priority: filters.priority !== "all" ? filters.priority : undefined,
+    ...preferences,
+  });
+
+  // Apply client-side filtering using useTaskFilters hook
+  const { filteredTasks, taskStats } = useTaskFilters(apiTasks, {
+    priority: filters.priority !== "all" ? filters.priority : undefined,
+    search: filters.search,
+    sortBy: preferences.sortBy,
+    sortDirection: preferences.sortDirection,
   });
   
   const prefetchTask = usePrefetchTask()
 
-  // Memoized data processing
-  const processedTasks = useMemo(() => {
-    if (!apiTasks) return [];
-    
-    return apiTasks.map(task => ({
-      ...task,
-    }));
-  }, [apiTasks]);
-  
   const handleTaskPress = (task) => {
     router.push({
       pathname: "/TaskDetails",
@@ -150,9 +160,9 @@ const Tasks = () => {
   }, [navigation]);
 
   const handleFilterPress = useCallback((filter) => {
-    setSelectedFilter(filter);
+    setFilters({ priority: filter === "All" ? "all" : filter.toLowerCase() });
     listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
-  }, []);
+  }, [setFilters]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -164,19 +174,19 @@ const Tasks = () => {
   }, [refetch]);
 
   const handleSearch = useCallback((text) => {
-    setSearchQuery(text);
+    setFilters({ search: text });
     
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     searchTimeoutRef.current = setTimeout(() => {
-      // Search will be triggered by the useProjects hook
+      // Search will be triggered by the useTasksByUser hook
     }, 300);
-  }, []);
+  }, [setFilters]);
 
-  const handlePrefetch = useCallback((projectId) => {
-    prefetchTask(projectId);
+  const handlePrefetch = useCallback((taskId) => {
+    prefetchTask(taskId);
   }, [prefetchTask]);
 
   const handleLoadMore = useCallback(() => {
@@ -200,6 +210,76 @@ const Tasks = () => {
     }
   };
   
+  const renderAvatarGroup = (users, maxVisible = 3, size = 24) => {   
+    const visibleUsers = users.slice(0, maxVisible);
+    const remainingCount = users.length - maxVisible;
+    const containerWidth = size + (visibleUsers.length - 1) * (size * 0.7);
+
+    return (
+      <View style={[styles.avatarGroupContainer, { width: containerWidth, height: size }]}>
+        {visibleUsers.map((user, index) => (
+          <View
+            key={user?.id || index}
+            style={[
+              styles.avatarGroupItem,
+              {
+                left: index * (size * 0.7),
+                zIndex: visibleUsers.length - index,
+                width: size,
+                height: size,
+              }
+            ]}
+          >
+            <View
+              style={[
+                styles.avatar,
+                styles.avatarGroupAvatar,
+                { 
+                  width: size, 
+                  height: size, 
+                  borderRadius: size / 2,
+                  borderWidth: 2,
+                  borderColor: '#fff',
+                },
+              ]}
+            >
+              {user?.profile_picture ? (
+                <Image
+                  source={{ uri: `${FILES_URL}${user.profile_picture}` }}
+                  style={[
+                    styles.avatarImage,
+                    { width: size - 4, height: size - 4, borderRadius: (size - 4) / 2 },
+                  ]}
+                />
+              ) : (
+                <Ionicons name="person" size={size * 0.5} color="#9CA3AF" />
+              )}
+            </View>
+          </View>
+        ))}
+        
+        {remainingCount > 0 && (
+          <View
+            style={[
+              styles.avatarGroupCounter,
+              {
+                left: visibleUsers.length * (size * 0.7),
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                zIndex: 0,
+              }
+            ]}
+          >
+            <Text style={[styles.avatarGroupCounterText, { fontSize: size * 0.35 }]}>
+              +{remainingCount}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderAvatar = (member, size = 32) => (
     <View
       style={[
@@ -263,14 +343,6 @@ const Tasks = () => {
         </View>
       </View>
 
-      {/* Task Tags */}
-      {item?.tags &&
-        <View style={styles.taskTags}>
-          <View style={styles.taskTag}>
-            <Text style={styles.taskTagText}>{item.tag}</Text>
-          </View>
-        </View>
-      }
       <View style={styles.taskFooter}>
         <View style={styles.taskFooterLeft}>
           <View
@@ -281,12 +353,7 @@ const Tasks = () => {
               },
             ]}
           >
-            <View
-              style={[
-                styles.priorityDot,
-                { backgroundColor: getPriorityColor(item?.priority) },
-              ]}
-            />
+            <View style={[ styles.priorityDot, { backgroundColor: getPriorityColor(item?.priority) }, ]} />
             <Text
               style={[
                 styles.priorityText,
@@ -298,16 +365,18 @@ const Tasks = () => {
           </View>
         </View>
 
-        <View style={styles.taskFooterRight}>
-          <Text style={styles.assignedByText}>by</Text>
-          <View style={styles.assignedBy}>
-            {renderAvatar(item?.project?.owner_id, 20)}
+        {item?.assignedUsers.length > 0 && 
+          <View style={styles.taskFooterRight}>
+            <Text style={styles.assignedByText}>by</Text>
+            <View style={styles.assignedBy}>
+              {renderAvatar(item?.project?.owner, 18)}
+            </View>
+            <Ionicons name="arrow-forward" size={12} color="#9CA3AF" />
+            <View style={styles.assignedTo}>
+              {renderAvatarGroup(item?.assignedUsers, 3, 22)}
+            </View>
           </View>
-          <Ionicons name="arrow-forward" size={12} color="#9CA3AF" />
-          <View style={styles.assignedTo}>
-            {renderAvatar(item?.assignedUsers[0], 24)}
-          </View>
-        </View>
+        }
       </View>
     </TouchableOpacity>
   );
@@ -316,52 +385,42 @@ const Tasks = () => {
     <FilterChip
       title={item.title}
       count={item.count}
-      isActive={selectedFilter === item.title}
+      isActive={filters.priority === (item.title === "All" ? "all" : item.title.toLowerCase())}
       onPress={handleFilterPress}
       color={item.color}
       icon={item.icon}
     />
-  ), [selectedFilter, handleFilterPress]);
+  ), [filters.priority, handleFilterPress]);
 
-  const filterStats = useMemo(() => {
-    if (!apiTasks) return {};
-    
-    return {
-      all: apiTasks.length,
-      high: apiTasks.filter(p => p.priority === 'high').length,
-      medium: apiTasks.filter(p => p.priority === 'medium').length,
-      low: apiTasks.filter(p => p.priority === 'low').length,
-    };
-  }, [apiTasks]);
-
-  const filters = useMemo(() => [
+  // Generate filter options with counts from taskStats
+  const filterOptions = useMemo(() => [
     { 
       title: "All", 
-      count: filterStats.all, 
+      count: taskStats.total || 0, 
       color: "#1C30A4", 
       icon: "apps-outline" 
     },
     { 
       title: "High", 
-      count: filterStats.high, 
+      count: taskStats.byPriority?.high || 0, 
       color: "#EF4444", 
       icon: "flag" 
     },
     { 
       title: "Medium", 
-      count: filterStats.medium, 
+      count: taskStats.byPriority?.medium || 0, 
       color: "#F59E0B", 
       icon: "flag" 
     },
     { 
       title: "Low", 
-      count: filterStats.low, 
+      count: taskStats.byPriority?.low || 0, 
       color: "#10B981", 
       icon: "flag" 
     },
-  ], [filterStats]);
+  ], [taskStats]);
 
-    // Focus effect for refreshing data when screen comes into focus
+  // Focus effect for refreshing data when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (!isLoading && !isFetching) {
@@ -380,7 +439,7 @@ const Tasks = () => {
               <Text style={styles.headerTitle}>Tasks</Text>
               <View style={styles.headerBadge}>
                 <Text style={styles.headerBadgeText}>
-                  {pagination?.total_items || apiTasks?.length}
+                  {pagination?.total_items || filteredTasks?.length || 0}
                 </Text>
               </View>
             </View>
@@ -403,11 +462,11 @@ const Tasks = () => {
             <TextInput
               style={styles.searchInput}
               placeholder="Search tasks, projects, or assignees..."
-              value={searchQuery}
+              value={filters.search}
               onChangeText={handleSearch}
               placeholderTextColor="#9CA3AF"
             />
-            {searchQuery.length > 0 && (
+            {filters.search && filters.search.length > 0 && (
               <TouchableOpacity onPress={() => handleSearch("")}>
                 <Ionicons name="close-circle" size={20} color="#9CA3AF" />
               </TouchableOpacity>
@@ -431,7 +490,7 @@ const Tasks = () => {
           <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
           <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>
-            {error?.message || "Failed to load projects"}
+            {error?.message || "Failed to load tasks"}
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={refetch}>
             <Text style={styles.retryButtonText}>Try Again</Text>
@@ -450,7 +509,7 @@ const Tasks = () => {
             <Text style={styles.headerTitle}>Tasks</Text>
             <View style={styles.headerBadge}>
               <Text style={styles.headerBadgeText}>
-                {pagination?.total_items || apiTasks?.length}
+                {pagination?.total_items || filteredTasks?.length || 0}
               </Text>
             </View>
           </View>
@@ -474,11 +533,11 @@ const Tasks = () => {
           <TextInput
             style={styles.searchInput}
             placeholder="Search tasks, projects, or assignees..."
-            value={searchQuery}
+            value={filters.search}
             onChangeText={handleSearch}
             placeholderTextColor="#9CA3AF"
           />
-          {searchQuery.length > 0 && (
+          {filters.search && filters.search.length > 0 && (
             <TouchableOpacity onPress={() => handleSearch("")}>
               <Ionicons name="close-circle" size={20} color="#9CA3AF" />
             </TouchableOpacity>
@@ -491,24 +550,25 @@ const Tasks = () => {
         <Text style={styles.statsSectionTitle}>Filter Tasks</Text>
         <FlatList
           horizontal
-          data={filters}
+          data={filterOptions}
           renderItem={renderFilter}
           keyExtractor={(item) => item.title}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filtersContainer}
         />
       </View>
+
       {/* Tasks List */}
-      {processedTasks.length === 0 ? (
+      {filteredTasks.length === 0 ? (
         <EmptyState 
           onCreatePress={handleCreateTask} 
-          searchQuery={searchQuery}
+          searchQuery={filters.search}
           type={'task'}
         />
       ) : (
         <OptimizedList
           ref={listRef}
-          data={processedTasks}
+          data={filteredTasks}
           renderItem={renderTaskCard}
           keyExtractor={keyExtractor}
           refreshControl={
@@ -522,7 +582,7 @@ const Tasks = () => {
           ListEmptyComponent={
             <EmptyState 
               onCreatePress={handleCreateTask} 
-              searchQuery={searchQuery}
+              searchQuery={filters.search}
               type={'task'}
             />
           }
@@ -1082,6 +1142,7 @@ const styles = StyleSheet.create({
   },
   assignedTo: {
     marginLeft: 8,
+    minWidth: 22,
   },
   avatar: {
     backgroundColor: "#F3F4F6",
@@ -1137,10 +1198,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  errorState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
   retryButton: {
-    marginTop: 10,
-    padding: 10,
     backgroundColor: '#1C30A4',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   filterChip: {
@@ -1192,10 +1273,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  tasksList:{
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  }
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  avatarGroupContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarGroupItem: {
+    position: 'absolute',
+    top: 0,
+  },
+  avatarGroupAvatar: {
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  avatarGroupCounter: {
+    position: 'absolute',
+    top: 0,
+    backgroundColor: '#6B7280',
+    borderWidth: 2,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  avatarGroupCounterText: {
+    color: '#fff',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });
 
 export default Tasks;

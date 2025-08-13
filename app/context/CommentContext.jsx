@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
 
 const CommentContext = createContext();
 
@@ -10,6 +10,13 @@ const initialState = {
 
 const commentReducer = (state, action) => {
   switch (action.type) {
+    case 'RESET_STATE':
+      return {
+        expandedComments: new Set(),
+        replyingTo: null,
+        draftComments: new Map(),
+      };
+      
     case 'TOGGLE_COMMENT_EXPANSION':
       const newExpandedComments = new Set(state.expandedComments);
       if (newExpandedComments.has(action.payload)) {
@@ -18,42 +25,74 @@ const commentReducer = (state, action) => {
         newExpandedComments.add(action.payload);
       }
       return { ...state, expandedComments: newExpandedComments };
+      
     case 'SET_REPLYING_TO':
       return { ...state, replyingTo: action.payload };
+      
     case 'SET_DRAFT_COMMENT':
       const newDraftComments = new Map(state.draftComments);
       newDraftComments.set(action.payload.taskId, action.payload.content);
       return { ...state, draftComments: newDraftComments };
+      
     case 'CLEAR_DRAFT_COMMENT':
       const clearedDrafts = new Map(state.draftComments);
       clearedDrafts.delete(action.payload);
       return { ...state, draftComments: clearedDrafts };
+      
     default:
       return state;
   }
 };
 
-export const CommentProvider = ({ children }) => {
+export const CommentProvider = forwardRef(({ children }, ref) => {
   const [state, dispatch] = useReducer(commentReducer, initialState);
 
-  const contextValue = {
+  // Reset function for logout
+  const resetCommentState = useCallback(() => {
+    dispatch({ type: 'RESET_STATE' });
+  }, []);
+
+  // Expose reset function via ref
+  useImperativeHandle(ref, () => ({
+    reset: resetCommentState,
+  }));
+
+  // Memoized actions
+  const toggleCommentExpansion = useCallback((commentId) => 
+    dispatch({ type: 'TOGGLE_COMMENT_EXPANSION', payload: commentId }), []);
+
+  const setReplyingTo = useCallback((comment) => 
+    dispatch({ type: 'SET_REPLYING_TO', payload: comment }), []);
+
+  const setDraftComment = useCallback((taskId, content) => 
+    dispatch({ type: 'SET_DRAFT_COMMENT', payload: { taskId, content } }), []);
+
+  const clearDraftComment = useCallback((taskId) => 
+    dispatch({ type: 'CLEAR_DRAFT_COMMENT', payload: taskId }), []);
+
+  // Context value
+  const contextValue = useMemo(() => ({
     ...state,
-    toggleCommentExpansion: (commentId) => 
-      dispatch({ type: 'TOGGLE_COMMENT_EXPANSION', payload: commentId }),
-    setReplyingTo: (comment) => 
-      dispatch({ type: 'SET_REPLYING_TO', payload: comment }),
-    setDraftComment: (taskId, content) => 
-      dispatch({ type: 'SET_DRAFT_COMMENT', payload: { taskId, content } }),
-    clearDraftComment: (taskId) => 
-      dispatch({ type: 'CLEAR_DRAFT_COMMENT', payload: taskId }),
-  };
+    toggleCommentExpansion,
+    setReplyingTo,
+    setDraftComment,
+    clearDraftComment,
+    resetCommentState, // Expose reset function
+  }), [
+    state,
+    toggleCommentExpansion,
+    setReplyingTo,
+    setDraftComment,
+    clearDraftComment,
+    resetCommentState,
+  ]);
 
   return (
     <CommentContext.Provider value={contextValue}>
       {children}
     </CommentContext.Provider>
   );
-};
+});
 
 export const useCommentContext = () => {
   const context = useContext(CommentContext);
@@ -62,3 +101,5 @@ export const useCommentContext = () => {
   }
   return context;
 };
+
+export default CommentProvider;

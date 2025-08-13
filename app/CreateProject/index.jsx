@@ -16,10 +16,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useCreateProject } from "../hooks/useProjects";
 import { useAuthStatus } from "../hooks/useAuth";
+import { useTags, useCreateTag } from "../hooks/useTags";
+import { useFriends } from "../hooks/useFriends";
 
 const CreateProject = () => {
   const { user } = useAuthStatus();
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3B82F6");
+
   const createProjectMutation = useCreateProject();
+  const { tags: userTags, isLoading: tagsLoading } = useTags();
+  const { friends, isLoading: friendsLoading } = useFriends();
+  const createTagMutation = useCreateTag();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -65,7 +75,6 @@ const CreateProject = () => {
     height: 918,
   });
 
-  const [attachmentType, setAttachmentType] = useState("file");
   const [showMockFiles, setShowMockFiles] = useState(false);
   const [showMockCover, setShowMockCover] = useState(false);
 
@@ -77,95 +86,15 @@ const CreateProject = () => {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedYear, setSelectedYear] = useState(null);
 
-  // Time picker states
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timePickerType, setTimePickerType] = useState("");
-  const [activeTimeSelector, setActiveTimeSelector] = useState("hour");
-  const [selectedHour, setSelectedHour] = useState(null);
-  const [selectedMinute, setSelectedMinute] = useState(null);
-  const [selectedPeriod, setSelectedPeriod] = useState("AM");
-
   // Optional sections visibility
   const [showDateSection, setShowDateSection] = useState(false);
-  const [showTimeSection, setShowTimeSection] = useState(false);
 
   // Selection modals states
   const [showTagModal, setShowTagModal] = useState(false);
-  const [showIconModal, setShowIconModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showPriorityModal, setShowPriorityModal] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [memberSearchQuery, setMemberSearchQuery] = useState("");
-
-  // Sample options data
-  const projectTags = [
-    { id: 1, name: "Web Development", color: "#3B82F6", icon: "code-slash" },
-    { id: 2, name: "Mobile App", color: "#10B981", icon: "phone-portrait" },
-    { id: 3, name: "UI/UX Design", color: "#8B5CF6", icon: "color-palette" },
-    { id: 4, name: "Backend", color: "#EF4444", icon: "server" },
-    { id: 5, name: "DevOps", color: "#F59E0B", icon: "cloud" },
-    { id: 6, name: "Marketing", color: "#EC4899", icon: "trending-up" },
-  ];
-
-  const projectIcons = [
-    { id: 1, name: "code-slash", label: "Code" },
-    { id: 2, name: "phone-portrait", label: "Mobile" },
-    { id: 3, name: "color-palette", label: "Design" },
-    { id: 4, name: "server", label: "Server" },
-    { id: 5, name: "cloud", label: "Cloud" },
-    { id: 6, name: "trending-up", label: "Analytics" },
-    { id: 7, name: "briefcase", label: "Business" },
-    { id: 8, name: "bulb", label: "Innovation" },
-    { id: 9, name: "rocket", label: "Launch" },
-    { id: 10, name: "shield", label: "Security" },
-    { id: 11, name: "layers", label: "Architecture" },
-    { id: 12, name: "globe", label: "Global" },
-  ];
-
-  const teamMembers = [
-    {
-      id: 1,
-      name: "John Doe",
-      role: "Lead Developer",
-      email: "john@company.com",
-      avatar: null,
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      role: "UI/UX Designer",
-      email: "jane@company.com",
-      avatar: null,
-    },
-    {
-      id: 3,
-      name: "Mike Johnson",
-      role: "Backend Developer",
-      email: "mike@company.com",
-      avatar: null,
-    },
-    {
-      id: 4,
-      name: "Sarah Wilson",
-      role: "QA Tester",
-      email: "sarah@company.com",
-      avatar: null,
-    },
-    {
-      id: 5,
-      name: "Alex Chen",
-      role: "DevOps Engineer",
-      email: "alex@company.com",
-      avatar: null,
-    },
-    {
-      id: 6,
-      name: "Emma Davis",
-      role: "Product Manager",
-      email: "emma@company.com",
-      avatar: null,
-    },
-  ];
 
   const priorities = [
     { id: 1, name: "Low", color: "#10B981", icon: "flag" },
@@ -198,28 +127,6 @@ const CreateProject = () => {
     value: (new Date().getFullYear() + i).toString(),
     label: (new Date().getFullYear() + i).toString(),
   }));
-
-  const hours = Array.from({ length: 12 }, (_, i) => ({
-    value: (i + 1).toString().padStart(2, "0"),
-    label: (i + 1).toString(),
-  }));
-
-  const minutes = Array.from({ length: 60 }, (_, i) => ({
-    value: i.toString().padStart(2, "0"),
-    label: i.toString().padStart(2, "0"),
-  }));
-
-  const timePresets = [
-    { label: "9 am", value: "09:00 AM" },
-    { label: "12 pm", value: "12:00 PM" },
-    { label: "4 pm", value: "16:00 PM" },
-    { label: "6 pm", value: "18:00 PM" },
-  ];
-
-  const periods = [
-    { value: "AM", label: "AM" },
-    { value: "PM", label: "PM" },
-  ];
 
   const handleBack = () => {
     router.back();
@@ -303,6 +210,11 @@ const CreateProject = () => {
     return "document";
   };
 
+  function parseDate(dateStr) {
+    const [day, month, year] = dateStr.split('-');
+    return new Date(year, month - 1, day); // month is 0-indexed
+  }
+
   const handleCreateProject = async () => {
     if (!formData.title.trim()) {
       Alert.alert("Error", "Project title is required");
@@ -312,22 +224,15 @@ const CreateProject = () => {
     try {
       // Prepare project data for API
       const projectData = {
-        title: formData.title.trim() || null,
+        title: formData.title.trim(),
         description: formData.description?.trim() || null,
         priority: formData.priority?.toLowerCase() || 'low',
-        start_date: formData.startDate || null,
-        end_date: formData.endDate || null,
-        members: selectedMembers.map(member => member.id) || null,
+        start_date: parseDate(formData.startDate) || null,
+        end_date: parseDate(formData.endDate) || null,
+        members: selectedMembers.map(member => member.id),
+        tags: formData.selectedTags?.map(tag => tag.id) || [],
         attachments: formData.attachments || []
       };
-
-      // Handle tag selection
-      if (formData.tag) {
-        const selectedTag = projectTags.find(tag => tag.name === formData.tag);
-        if (selectedTag) {
-          projectData.tag = selectedTag.id;
-        }
-      }
 
       await createProjectMutation.mutateAsync({
         projectData,
@@ -337,7 +242,7 @@ const CreateProject = () => {
       Alert.alert(
         "Success", 
         "Project created successfully!",
-        [{ text: "OK" }]
+        [{ text: "OK", onPress: () => router.back() }]
       );
 
     } catch (error) {
@@ -386,57 +291,59 @@ const CreateProject = () => {
     }
   };
 
-  // Time picker handlers
-  const handleTimePress = (type) => {
-    setTimePickerType(type);
-    setSelectedHour("09");
-    setSelectedMinute("00");
-    setSelectedPeriod("AM");
-    setShowTimePicker(true);
-  };
+  // Selection handlers
+  const handleTagSelect = (tag) => {
+    const isSelected = formData.selectedTags?.some(t => t.id === tag.id);
+    let newSelectedTags;
 
-  const handleTimeCancel = () => {
-    setShowTimePicker(false);
-    setSelectedHour(null);
-    setSelectedMinute(null);
-    setSelectedPeriod("AM");
-  };
+    if (isSelected) {
+      newSelectedTags = formData.selectedTags.filter(t => t.id !== tag.id);
+    } else {
+      newSelectedTags = [...(formData.selectedTags || []), tag];
+    }
 
-  const handleTimeSelect = () => {
-    if (selectedHour && selectedMinute !== null) {
-      const timeString = `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
-      handleInputChange(timePickerType, timeString);
-      setShowTimePicker(false);
+    handleInputChange("selectedTags", newSelectedTags);
+  };
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+
+    setIsCreatingTag(true);
+    try {
+      const response = await createTagMutation.mutateAsync({
+        name: newTagName.trim(),
+        color: newTagColor,
+      });
+
+      // Add the new tag to selected tags
+      const newTag = response.data;
+      const newSelectedTags = [...(formData.selectedTags || []), newTag];
+      handleInputChange("selectedTags", newSelectedTags);
+
+      // Reset form
+      setNewTagName("");
+      setNewTagColor("#3B82F6");
+      setShowTagModal(false);
+    } catch (error) {
+      console.error('Error creating tag:', error);
+    } finally {
+      setIsCreatingTag(false);
     }
   };
 
-  const handleTimePreset = (preset) => {
-    handleInputChange(timePickerType, preset.value);
-    setShowTimePicker(false);
-  };
+  const filteredTags = userTags?.filter(tag =>
+    tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase())
+  ) || [];
 
-  const handleHourScroll = (hour) => {
-    setSelectedHour(hour.value);
-  };
-
-  const handleMinuteScroll = (minute) => {
-    setSelectedMinute(minute.value);
-  };
-
-  const handlePeriodScroll = (period) => {
-    setSelectedPeriod(period.value);
-  };
-
-  // Selection handlers
-  const handleTagSelect = (tag) => {
-    handleInputChange("tag", tag.name);
-    setShowTagModal(false);
-  };
-
-  const handleIconSelect = (icon) => {
-    handleInputChange("icon", icon.name);
-    setShowIconModal(false);
-  };
+  const filteredFriends = friends?.filter(friendship => {
+    const friend = friendship.user;
+    return friend.full_name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+          friend.email.toLowerCase().includes(memberSearchQuery.toLowerCase());
+  }).map(friendship => ({
+    id: friendship.user.id,
+    name: friendship.user.full_name,
+    email: friendship.user.email,
+    avatar: friendship.user.profile_picture
+  })) || [];
 
   const handleMemberToggle = (member) => {
     const isSelected = selectedMembers.find((m) => m.id === member.id);
@@ -457,41 +364,11 @@ const CreateProject = () => {
     setShowPriorityModal(false);
   };
 
-  // Filter members based on search query
-  const filteredMembers = teamMembers.filter(
-    (member) =>
-      member.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-      member.role.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(memberSearchQuery.toLowerCase())
-  );
-
   const getCurrentDateData = () => {
     if (activeSelector === "day") return days;
     if (activeSelector === "month") return months;
     if (activeSelector === "year") return years;
     return [];
-  };
-
-  const renderScrollWheelItem = ({ item }, selectedValue, onPress) => {
-    const isSelected = selectedValue === item.value;
-    return (
-      <TouchableOpacity
-        style={[
-          styles.scrollWheelItem,
-          isSelected && styles.selectedScrollWheelItem,
-        ]}
-        onPress={() => onPress(item)}
-      >
-        <Text
-          style={[
-            styles.scrollWheelItemText,
-            isSelected && styles.selectedScrollWheelItemText,
-          ]}
-        >
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    );
   };
 
   const renderDateItem = ({ item }) => (
@@ -684,26 +561,53 @@ const CreateProject = () => {
 
         {/* Project Tag */}
         {renderFormSection(
-          "Project Tag",
-          <View style={styles.inputContainer}>
-            <TouchableOpacity
-              style={styles.dropdownButton}
-              onPress={() => setShowTagModal(true)}
-            >
-              <View style={styles.dropdownContent}>
-                <Ionicons name="pricetag-outline" size={16} color="#1C30A4" />
-                <Text
-                  style={[
-                    styles.dropdownText,
-                    { marginLeft: 8 },
-                    !formData.tag && styles.placeholderText,
-                  ]}
-                >
-                  {formData.tag || "Select Project Tag"}
+          "Project Tags",
+          <View>
+            <View style={styles.inputContainer}>
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setShowTagModal(true)}
+              >
+                <View style={styles.dropdownContent}>
+                  <Ionicons name="pricetag-outline" size={16} color="#1C30A4" />
+                  <Text
+                    style={[
+                      styles.dropdownText,
+                      { marginLeft: 8 },
+                      (!formData.selectedTags || formData.selectedTags.length === 0) && styles.placeholderText,
+                    ]}
+                  >
+                    {formData.selectedTags && formData.selectedTags.length > 0
+                      ? `${formData.selectedTags.length} tags selected`
+                      : "Select Project Tags"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Selected Tags Display */}
+            {formData.selectedTags && formData.selectedTags.length > 0 && (
+              <View style={styles.selectedTagsContainer}>
+                <Text style={styles.selectedTagsTitle}>
+                  Selected Tags ({formData.selectedTags.length})
                 </Text>
+                <View style={styles.tagsContainer}>
+                  {formData.selectedTags.map((tag) => (
+                    <View key={tag.id} style={[styles.tagChip, { backgroundColor: tag.color + '20' }]}>
+                      <View style={[styles.tagColorDot, { backgroundColor: tag.color }]} />
+                      <Text style={[styles.tagChipText, { color: tag.color }]}>{tag.name}</Text>
+                      <TouchableOpacity
+                        style={styles.removeTagButton}
+                        onPress={() => handleTagSelect(tag)}
+                      >
+                        <Ionicons name="close" size={12} color={tag.color} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
               </View>
-              <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
-            </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1060,115 +964,6 @@ const CreateProject = () => {
         </View>
       </Modal>
 
-      {/* Time Picker Modal */}
-      <Modal
-        visible={showTimePicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleTimeCancel}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.timeModalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Time</Text>
-            </View>
-
-            {/* Time Display */}
-            <View style={styles.timeDisplayContainer}>
-              <Text style={styles.currentTimeText}>
-                {selectedHour || "09"} : {selectedMinute || "00"}{" "}
-                {selectedPeriod}
-              </Text>
-            </View>
-
-            {/* Scroll Wheels */}
-            <View style={styles.scrollWheelsContainer}>
-              {/* Hours Wheel */}
-              <View style={styles.scrollWheelColumn}>
-                <FlatList
-                  data={hours}
-                  renderItem={(props) =>
-                    renderScrollWheelItem(props, selectedHour, handleHourScroll)
-                  }
-                  keyExtractor={(item) => `hour-${item.value}`}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollWheelList}
-                  contentContainerStyle={styles.scrollWheelContent}
-                />
-                <View style={styles.scrollWheelOverlay} />
-              </View>
-
-              {/* Colon Separator */}
-              <View style={styles.colonSeparator}>
-                <Text style={styles.colonText}>:</Text>
-              </View>
-
-              {/* Minutes Wheel */}
-              <View style={styles.scrollWheelColumn}>
-                <FlatList
-                  data={minutes}
-                  renderItem={(props) =>
-                    renderScrollWheelItem(
-                      props,
-                      selectedMinute,
-                      handleMinuteScroll
-                    )
-                  }
-                  keyExtractor={(item) => `minute-${item.value}`}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollWheelList}
-                  contentContainerStyle={styles.scrollWheelContent}
-                />
-                <View style={styles.scrollWheelOverlay} />
-              </View>
-
-              {/* AM/PM Wheel */}
-              <View style={styles.scrollWheelColumn}>
-                <FlatList
-                  data={periods}
-                  renderItem={(props) =>
-                    renderScrollWheelItem(
-                      props,
-                      selectedPeriod,
-                      handlePeriodScroll
-                    )
-                  }
-                  keyExtractor={(item) => `period-${item.value}`}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollWheelList}
-                  contentContainerStyle={styles.scrollWheelContent}
-                />
-                <View style={styles.scrollWheelOverlay} />
-              </View>
-            </View>
-
-            {/* Time Presets */}
-            <View style={styles.presetsContainer}>
-              <Text style={styles.presetsTitle}>Presets</Text>
-              <View style={styles.presetsRow}>
-                {timePresets.map((preset, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.presetButton}
-                    onPress={() => handleTimePreset(preset)}
-                  >
-                    <Text style={styles.presetButtonText}>{preset.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Done Button */}
-            <TouchableOpacity
-              style={styles.doneButton}
-              onPress={handleTimeSelect}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       {/* Project Tag Modal */}
       <Modal
         visible={showTagModal}
@@ -1187,123 +982,137 @@ const CreateProject = () => {
             onPress={() => {}}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Project Tag</Text>
+              <Text style={styles.modalTitle}>Select Project Tags</Text>
+              <Text style={styles.modalSubtitle}>
+                {formData.selectedTags?.length || 0} selected
+              </Text>
             </View>
 
-            <ScrollView
-              style={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {projectTags.map((tag) => (
-                <TouchableOpacity
-                  key={tag.id}
-                  style={[
-                    styles.optionItem,
-                    formData.tag === tag.name && styles.selectedOptionItem,
-                  ]}
-                  onPress={() => handleTagSelect(tag)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.optionContent}>
-                    <View
-                      style={[
-                        styles.tagColorDot,
-                        { backgroundColor: tag.color },
-                      ]}
-                    />
-                    <Ionicons
-                      name={tag.icon}
-                      size={20}
-                      color={tag.color}
-                      style={styles.optionIcon}
-                    />
-                    <Text
-                      style={[
-                        styles.optionText,
-                        formData.tag === tag.name && styles.selectedOptionText,
-                      ]}
-                    >
-                      {tag.name}
-                    </Text>
-                  </View>
-                  {formData.tag === tag.name && (
-                    <Ionicons name="checkmark" size={20} color="#1C30A4" />
-                  )}
+            {/* Tag Search Input */}
+            <View style={styles.searchInputContainer}>
+              <Ionicons
+                name="search"
+                size={20}
+                color="#9CA3AF"
+                style={styles.searchIcon}
+              />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search tags..."
+                value={tagSearchQuery}
+                onChangeText={setTagSearchQuery}
+                placeholderTextColor="#9CA3AF"
+              />
+              {tagSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setTagSearchQuery("")}>
+                  <Ionicons name="close-circle" size={20} color="#9CA3AF" />
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
+              )}
+            </View>
 
-            <TouchableOpacity
-              style={styles.cancelModalButton}
-              onPress={() => setShowTagModal(false)}
-            >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Project Icon Modal */}
-      <Modal
-        visible={showIconModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowIconModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowIconModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.dynamicModalContainer}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Project Icon</Text>
+            {/* Create New Tag Section */}
+            <View style={styles.createTagSection}>
+              <View style={styles.createTagInputRow}>
+                <TextInput
+                  style={styles.createTagInput}
+                  placeholder="Create new tag..."
+                  value={newTagName}
+                  onChangeText={setNewTagName}
+                  placeholderTextColor="#9CA3AF"
+                />
+                <TouchableOpacity
+                  style={[styles.colorPicker, { backgroundColor: newTagColor }]}
+                  onPress={() => {
+                    // Cycle through predefined colors
+                    const colors = ["#3B82F6", "#10B981", "#8B5CF6", "#EF4444", "#F59E0B", "#EC4899"];
+                    const currentIndex = colors.indexOf(newTagColor);
+                    const nextIndex = (currentIndex + 1) % colors.length;
+                    setNewTagColor(colors[nextIndex]);
+                  }}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.createTagButton, (!newTagName.trim() || isCreatingTag) && styles.disabledButton]}
+                onPress={handleCreateTag}
+                disabled={!newTagName.trim() || isCreatingTag}
+              >
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={styles.createTagButtonText}>
+                  {isCreatingTag ? "Creating..." : "Create Tag"}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <ScrollView
               style={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.iconGrid}>
-                {projectIcons.map((icon) => (
-                  <TouchableOpacity
-                    key={icon.id}
-                    style={[
-                      styles.iconItem,
-                      formData.icon === icon.name && styles.selectedIconItem,
-                    ]}
-                    onPress={() => handleIconSelect(icon)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={icon.name}
-                      size={24}
-                      color={formData.icon === icon.name ? "#fff" : "#1C30A4"}
-                    />
-                    <Text
+              {tagsLoading ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading tags...</Text>
+                </View>
+              ) : filteredTags.length === 0 ? (
+                <View style={styles.noResultsContainer}>
+                  <Ionicons name="pricetag" size={48} color="#D1D5DB" />
+                  <Text style={styles.noResultsText}>No tags found</Text>
+                  <Text style={styles.noResultsSubtext}>
+                    {tagSearchQuery ? "Try adjusting your search or create a new tag" : "Create your first tag above"}
+                  </Text>
+                </View>
+              ) : (
+                filteredTags.map((tag) => {
+                  const isSelected = formData.selectedTags?.some(t => t.id === tag.id);
+                  return (
+                    <TouchableOpacity
+                      key={tag.id}
                       style={[
-                        styles.iconItemText,
-                        formData.icon === icon.name &&
-                          styles.selectedIconItemText,
+                        styles.optionItem,
+                        isSelected && styles.selectedOptionItem,
                       ]}
+                      onPress={() => handleTagSelect(tag)}
+                      activeOpacity={0.7}
                     >
-                      {icon.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                      <View style={styles.optionContent}>
+                        <View
+                          style={[
+                            styles.tagColorDot,
+                            { backgroundColor: tag.color },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.optionText,
+                            isSelected && styles.selectedOptionText,
+                          ]}
+                        >
+                          {tag.name}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark" size={20} color="#1C30A4" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.cancelModalButton}
-              onPress={() => setShowIconModal(false)}
-            >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            <View style={styles.membersModalButtons}>
+              <TouchableOpacity
+                style={styles.cancelModalButton}
+                onPress={() => setShowTagModal(false)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmMembersButton}
+                onPress={() => setShowTagModal(false)}
+              >
+                <Text style={styles.confirmMembersButtonText}>
+                  Done ({formData.selectedTags?.length || 0})
+                </Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1328,7 +1137,7 @@ const CreateProject = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Team Members</Text>
               <Text style={styles.modalSubtitle}>
-                {selectedMembers.length} of {teamMembers.length} selected
+                {selectedMembers?.length} of {friends?.length} selected
               </Text>
             </View>
 
@@ -1358,53 +1167,59 @@ const CreateProject = () => {
               style={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {filteredMembers.map((member) => {
-                const isSelected = selectedMembers.find(
-                  (m) => m.id === member.id
-                );
-                return (
-                  <TouchableOpacity
-                    key={member.id}
-                    style={[
-                      styles.memberItem,
-                      isSelected && styles.selectedMemberItem,
-                    ]}
-                    onPress={() => handleMemberToggle(member)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.memberInfo}>
-                      {renderAvatar(member, 40)}
-                      <View style={styles.memberDetails}>
-                        <Text
-                          style={[
-                            styles.memberName,
-                            isSelected && styles.selectedMemberName,
-                          ]}
-                        >
-                          {member.name}
-                        </Text>
-                        <Text style={styles.memberRole}>{member.role}</Text>
-                        <Text style={styles.memberEmail}>{member.email}</Text>
-                      </View>
-                    </View>
-                    <View
-                      style={[styles.checkbox, isSelected && styles.checkedBox]}
-                    >
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-              {filteredMembers.length === 0 && (
+              {friendsLoading ? (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading friends...</Text>
+                </View>
+              ) : filteredFriends.length === 0 ? (
                 <View style={styles.noResultsContainer}>
-                  <Ionicons name="search" size={48} color="#D1D5DB" />
-                  <Text style={styles.noResultsText}>No members found</Text>
+                  <Ionicons name="people" size={48} color="#D1D5DB" />
+                  <Text style={styles.noResultsText}>No friends found</Text>
                   <Text style={styles.noResultsSubtext}>
-                    Try adjusting your search terms
+                    {memberSearchQuery ? "Try adjusting your search terms" : "Add some friends to invite them to projects"}
                   </Text>
                 </View>
+              ) : (
+                filteredFriends.map((member) => {
+                  const isSelected = selectedMembers.find((m) => m.id === member.id);
+                  return (
+                    <TouchableOpacity
+                      key={member.id}
+                      style={[
+                        styles.memberItem,
+                        isSelected && styles.selectedMemberItem,
+                      ]}
+                      onPress={() => handleMemberToggle(member)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.memberInfo}>
+                        {member.avatar ? (
+                          <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
+                        ) : (
+                          renderAvatar(member, 40)
+                        )}
+                        <View style={styles.memberDetails}>
+                          <Text
+                            style={[
+                              styles.memberName,
+                              isSelected && styles.selectedMemberName,
+                            ]}
+                          >
+                            {member.name}
+                          </Text>
+                          <Text style={styles.memberEmail}>{member.email}</Text>
+                        </View>
+                      </View>
+                      <View
+                        style={[styles.checkbox, isSelected && styles.checkedBox]}
+                      >
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={16} color="#fff" />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </ScrollView>
 
@@ -2492,6 +2307,119 @@ const styles = StyleSheet.create({
   createButtonDisabled: {
     opacity: 0.6,
     shadowOpacity: 0.1,
+  },
+  selectedTagsContainer: {
+    marginTop: 12,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  selectedTagsTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  tagChipText: {
+    fontSize: 12,
+    fontWeight: "500",
+    marginLeft: 6,
+    marginRight: 6,
+  },
+  removeTagButton: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  createTagSection: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  createTagInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  createTagInput: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#374151",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginRight: 12,
+  },
+  colorPicker: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  createTagButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1C30A4",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  createTagButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 6,
+  },
+  loadingContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#6B7280",
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
 });
 
