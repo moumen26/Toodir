@@ -1,263 +1,194 @@
-import React, { useState } from "react";
+import React, { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   FlatList,
   Image,
-  Alert,
   SafeAreaView,
   TextInput,
+  VirtualizedList,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useNavigation } from "expo-router";
+import { router, useFocusEffect, useNavigation } from "expo-router";
+import { useTasksByUser, useTaskStats, useTaskFilters, usePrefetchTask } from "../hooks/useTasks";
+import { useAuthStatus } from "../hooks/useAuth";
+import { RefreshControl } from 'react-native';
+import LoadingState from '../components/LoadingState'
+import EmptyState from '../components/EmptyState'
+
+// Optimized VirtualizedList for better performance than FlatList
+const OptimizedList = memo(({ 
+  data, 
+  renderItem, 
+  keyExtractor, 
+  refreshControl,
+  ListEmptyComponent,
+  onEndReached,
+  onEndReachedThreshold = 0.1,
+}) => {
+  const getItemCount = useCallback(() => data.length, [data.length]);
+  const getItem = useCallback((data, index) => data[index], []);
+
+  return (
+    <VirtualizedList
+      data={data}
+      initialNumToRender={10}
+      maxToRenderPerBatch={5}
+      updateCellsBatchingPeriod={50}
+      windowSize={10}
+      removeClippedSubviews={true}
+      getItemCount={getItemCount}
+      getItem={getItem}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      refreshControl={refreshControl}
+      ListEmptyComponent={ListEmptyComponent}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={onEndReachedThreshold}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.tasksList}
+    />
+  );
+});
+
+const FilterChip = memo(({ 
+  title, 
+  count, 
+  isActive, 
+  onPress, 
+  color,
+  icon 
+}) => {
+  const handlePress = useCallback(() => {
+    onPress(title);
+  }, [title, onPress]);
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.filterChip,
+        isActive && styles.activeFilterChip,
+        { borderColor: color }
+      ]}
+      onPress={handlePress}
+    >
+      <View style={styles.filterChipContent}>
+        <Ionicons name={icon} size={12} color={isActive ? "#fff" : color} />
+        <Text
+          style={[
+            styles.filterChipText,
+            isActive && styles.activeFilterChipText
+          ]}
+        >
+          {title}
+        </Text>
+        {count !== undefined && (
+          <View style={[
+            styles.filterChipBadge,
+            { backgroundColor: isActive ? "rgba(255,255,255,0.2)" : color + "20" }
+          ]}>
+            <Text style={[
+              styles.filterChipBadgeText,
+              { color: isActive ? "#fff" : color }
+            ]}>
+              {count}
+            </Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+});
 
 const Tasks = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
-
-  // Convert tasks to state so we can modify them
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      name: "Complete UI Design Review",
-      description: "Review and approve the new dashboard UI designs",
-      category: "Design Project",
-      priority: "High",
-      status: "pending",
-      assignedTo: { id: 1, avatar: null, name: "John Doe" },
-      assignedBy: { id: 2, avatar: null, name: "Sarah Wilson" },
-      dueDate: "2025-01-08",
-      dueTime: "11:30 AM",
-      project: "Dashboard Analytics UI",
-      completedAt: null,
-      createdAt: "2025-01-05",
-      estimatedTime: "2h",
-      tags: ["Design", "Review"],
-      subtasks: [
-        { id: 1, name: "Review color scheme", completed: true },
-        { id: 2, name: "Check responsive layout", completed: true },
-        { id: 3, name: "Validate accessibility", completed: false },
-        { id: 4, name: "Approve final design", completed: false },
-      ],
-    },
-    {
-      id: 2,
-      name: "Update Database Schema",
-      description: "Modify user table to include new profile fields",
-      category: "Backend Development",
-      priority: "Medium",
-      status: "completed",
-      assignedTo: { id: 2, avatar: null, name: "Jane Smith" },
-      assignedBy: { id: 1, avatar: null, name: "John Doe" },
-      dueDate: "2025-01-07",
-      dueTime: "Completed",
-      project: "E-commerce Mobile App",
-      completedAt: "2025-01-06",
-      createdAt: "2025-01-03",
-      estimatedTime: "4h",
-      tags: ["Database", "Backend"],
-      subtasks: [
-        { id: 1, name: "Design new schema", completed: true },
-        { id: 2, name: "Run migration scripts", completed: true },
-        { id: 3, name: "Test data integrity", completed: true },
-        { id: 4, name: "Update API endpoints", completed: true },
-      ],
-    },
-    {
-      id: 3,
-      name: "Client Presentation Prep",
-      description: "Prepare slides and demo for client meeting",
-      category: "Business Development",
-      priority: "High",
-      status: "in-progress",
-      assignedTo: { id: 3, avatar: null, name: "Mike Johnson" },
-      assignedBy: { id: 4, avatar: null, name: "Emma Davis" },
-      dueDate: "2025-01-09",
-      dueTime: "3:00 PM",
-      project: "Website Redesign",
-      completedAt: null,
-      createdAt: "2025-01-04",
-      estimatedTime: "3h",
-      tags: ["Presentation", "Client"],
-      subtasks: [
-        { id: 1, name: "Create slide deck", completed: true },
-        { id: 2, name: "Prepare demo environment", completed: true },
-        { id: 3, name: "Practice presentation", completed: false },
-        { id: 4, name: "Review with team", completed: false },
-      ],
-    },
-    {
-      id: 4,
-      name: "Bug Fix - Login Issue",
-      description: "Fix authentication bug affecting mobile users",
-      category: "Bug Fix",
-      priority: "High",
-      status: "pending",
-      assignedTo: { id: 4, avatar: null, name: "Emma Davis" },
-      assignedBy: { id: 2, avatar: null, name: "Jane Smith" },
-      dueDate: "2025-01-08",
-      dueTime: "5:00 PM",
-      project: "E-commerce Mobile App",
-      completedAt: null,
-      createdAt: "2025-01-07",
-      estimatedTime: "1.5h",
-      tags: ["Bug", "Authentication", "Mobile"],
-      subtasks: [
-        { id: 1, name: "Reproduce issue", completed: true },
-        { id: 2, name: "Identify root cause", completed: false },
-        { id: 3, name: "Implement fix", completed: false },
-        { id: 4, name: "Test on mobile devices", completed: false },
-      ],
-    },
-    {
-      id: 5,
-      name: "API Documentation Update",
-      description: "Update API docs with new endpoints and examples",
-      category: "Documentation",
-      priority: "Medium",
-      status: "pending",
-      assignedTo: { id: 5, avatar: null, name: "Alex Chen" },
-      assignedBy: { id: 3, avatar: null, name: "Mike Johnson" },
-      dueDate: "2025-01-12",
-      dueTime: "2:00 PM",
-      project: "API Integration",
-      completedAt: null,
-      createdAt: "2025-01-06",
-      estimatedTime: "2.5h",
-      tags: ["Documentation", "API"],
-      subtasks: [
-        { id: 1, name: "List new endpoints", completed: true },
-        { id: 2, name: "Write usage examples", completed: false },
-        { id: 3, name: "Update authentication docs", completed: false },
-        { id: 4, name: "Review with dev team", completed: false },
-      ],
-    },
-    {
-      id: 6,
-      name: "Performance Optimization",
-      description: "Optimize app performance and reduce load times",
-      category: "Performance",
-      priority: "Medium",
-      status: "in-progress",
-      assignedTo: { id: 6, avatar: null, name: "Tom Brown" },
-      assignedBy: { id: 1, avatar: null, name: "John Doe" },
-      dueDate: "2025-01-15",
-      dueTime: "4:00 PM",
-      project: "Website Redesign",
-      completedAt: null,
-      createdAt: "2025-01-05",
-      estimatedTime: "6h",
-      tags: ["Performance", "Optimization"],
-      subtasks: [
-        { id: 1, name: "Analyze current performance", completed: true },
-        { id: 2, name: "Identify bottlenecks", completed: true },
-        { id: 3, name: "Implement optimizations", completed: false },
-        { id: 4, name: "Conduct performance tests", completed: false },
-      ],
-    },
-    {
-      id: 7,
-      name: "Security Audit",
-      description: "Conduct security review of user authentication system",
-      category: "Security",
-      priority: "High",
-      status: "overdue",
-      assignedTo: { id: 7, avatar: null, name: "Lisa Garcia" },
-      assignedBy: { id: 2, avatar: null, name: "Jane Smith" },
-      dueDate: "2025-01-06",
-      dueTime: "Overdue",
-      project: "E-commerce Mobile App",
-      completedAt: null,
-      createdAt: "2025-01-02",
-      estimatedTime: "4h",
-      tags: ["Security", "Authentication"],
-      subtasks: [
-        { id: 1, name: "Review authentication flow", completed: true },
-        { id: 2, name: "Check for vulnerabilities", completed: false },
-        { id: 3, name: "Document findings", completed: false },
-        { id: 4, name: "Recommend fixes", completed: false },
-      ],
-    },
-    {
-      id: 8,
-      name: "User Testing Setup",
-      description: "Set up user testing environment for new features",
-      category: "Testing",
-      priority: "Low",
-      status: "pending",
-      assignedTo: { id: 8, avatar: null, name: "Ryan Lee" },
-      assignedBy: { id: 4, avatar: null, name: "Emma Davis" },
-      dueDate: "2025-01-18",
-      dueTime: "1:00 PM",
-      project: "Mobile Game Development",
-      completedAt: null,
-      createdAt: "2025-01-07",
-      estimatedTime: "3h",
-      tags: ["Testing", "UX"],
-      subtasks: [
-        { id: 1, name: "Define test scenarios", completed: false },
-        { id: 2, name: "Recruit test users", completed: false },
-        { id: 3, name: "Setup testing tools", completed: false },
-        { id: 4, name: "Schedule sessions", completed: false },
-      ],
-    },
-  ]);
-
+  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
-
-  // Function to toggle task completion status
-  const toggleTaskCompletion = (taskId) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) => {
-        if (task.id === taskId) {
-          const newStatus =
-            task.status === "completed" ? "pending" : "completed";
-          const currentDate = new Date().toISOString().split("T")[0];
-
-          return {
-            ...task,
-            status: newStatus,
-            completedAt: newStatus === "completed" ? currentDate : null,
-          };
-        }
-        return task;
-      })
-    );
-  };
-
-  const filters = ["All", "pending", "in-progress", "completed", "overdue"];
-
-  // Filter tasks based on search and selected filter
-  const filteredTasks = tasks.filter((task) => {
-    const matchesSearch =
-      task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.assignedTo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.tags.some((tag) =>
-        tag.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-
-    const matchesFilter =
-      selectedFilter === "All" || task.status === selectedFilter;
-
-    return matchesSearch && matchesFilter;
+  const listRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
+  const { user } = useAuthStatus();
+  const { 
+    tasks: apiTasks, 
+    pagination,
+    isLoading,
+    isError,
+    error, 
+    refetch,
+    isFetching,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useTasksByUser({
+    search: searchQuery.length >= 2 ? searchQuery : undefined,
+    priority: selectedFilter !== "All" ? selectedFilter.toLowerCase() : undefined,
   });
+  
+  const prefetchTask = usePrefetchTask()
 
+  // Memoized data processing
+  const processedTasks = useMemo(() => {
+    if (!apiTasks) return [];
+    
+    return apiTasks.map(task => ({
+      ...task,
+    }));
+  }, [apiTasks]);
+  
   const handleTaskPress = (task) => {
-    router.push(`/TaskDetails?taskId=${task.id}`);
+    router.push({
+      pathname: "/TaskDetails",
+      params: { taskId: task.id }
+    });
   };
 
-  const handleFilterPress = (filter) => {
+  const handleCreateTask = useCallback(() => {
+    navigation.navigate("CreateTask/index");
+  }, [navigation]);
+
+  const handleFilterPress = useCallback((filter) => {
     setSelectedFilter(filter);
-  };
+    listRef.current?.scrollToOffset?.({ offset: 0, animated: true });
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
+
+  const handleSearch = useCallback((text) => {
+    setSearchQuery(text);
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      // Search will be triggered by the useProjects hook
+    }, 300);
+  }, []);
+
+  const handlePrefetch = useCallback((projectId) => {
+    prefetchTask(projectId);
+  }, [prefetchTask]);
+
+  const handleLoadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const keyExtractor = useCallback((item) => item.id, []);
 
   const getPriorityColor = (priority) => {
-    switch (priority.toLowerCase()) {
+    switch (priority?.toLowerCase()) {
       case "high":
         return "#EF4444";
       case "medium":
@@ -268,69 +199,7 @@ const Tasks = () => {
         return "#6B7280";
     }
   };
-
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "#10B981";
-      case "in-progress":
-        return "#3B82F6";
-      case "pending":
-        return "#F59E0B";
-      case "overdue":
-        return "#EF4444";
-      default:
-        return "#6B7280";
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "checkmark-circle";
-      case "in-progress":
-        return "time";
-      case "pending":
-        return "hourglass";
-      case "overdue":
-        return "warning";
-      default:
-        return "help-circle";
-    }
-  };
-
-  const getCategoryIcon = (category) => {
-    switch (category.toLowerCase()) {
-      case "design project":
-        return "color-palette";
-      case "backend development":
-        return "server";
-      case "business development":
-        return "business";
-      case "bug fix":
-        return "bug";
-      case "documentation":
-        return "document-text";
-      case "performance":
-        return "speedometer";
-      case "security":
-        return "shield";
-      case "testing":
-        return "flask";
-      default:
-        return "list";
-    }
-  };
-
-  const getCompletedSubtasks = (subtasks) => {
-    return subtasks.filter((subtask) => subtask.completed).length;
-  };
-
-  const getSubtaskProgress = (subtasks) => {
-    const completed = getCompletedSubtasks(subtasks);
-    return Math.round((completed / subtasks.length) * 100);
-  };
-
+  
   const renderAvatar = (member, size = 32) => (
     <View
       style={[
@@ -338,9 +207,9 @@ const Tasks = () => {
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      {member.avatar ? (
+      {member?.avatar ? (
         <Image
-          source={{ uri: member.avatar }}
+          source={{ uri: member?.avatar }}
           style={[
             styles.avatarImage,
             { width: size, height: size, borderRadius: size / 2 },
@@ -352,235 +221,225 @@ const Tasks = () => {
     </View>
   );
 
-  const renderTaskCard = ({ item }) => (
+  const renderTaskCard = ({ item }) => (   
     <TouchableOpacity
       style={[
         styles.taskCard,
-        item.status === "overdue" && styles.overdueTaskCard,
-        item.status === "completed" && styles.completedTaskCard,
       ]}
       onPress={() => handleTaskPress(item)}
     >
-      {/* Overdue Badge */}
-      {item.status === "overdue" && (
-        <View style={styles.overdueBadge}>
-          <Ionicons name="warning" size={12} color="#fff" />
-          <Text style={styles.overdueBadgeText}>OVERDUE</Text>
-        </View>
-      )}
-
-      {/* Completed Check Badge */}
-      {/* {item.status === "completed" && (
-        <View style={styles.completedBadge}>
-          <Ionicons name="checkmark-circle" size={16} color="#fff" />
-          <Text style={styles.completedBadgeText}>DONE</Text>
-        </View>
-      )} */}
-
       <View style={styles.taskHeader}>
         <View style={styles.taskHeaderLeft}>
           <View style={styles.taskIcon}>
-            <View
-              style={[
-                styles.taskIconBackground,
-                { backgroundColor: getPriorityColor(item.priority) + "20" },
-                item.status === "completed" &&
-                  styles.completedTaskIconBackground,
-              ]}
-            >
-              {item.status === "completed" ? (
-                <Ionicons name="checkmark" size={20} color="#10B981" />
-              ) : (
-                <Ionicons
-                  name={getCategoryIcon(item.category)}
-                  size={20}
-                  color={getPriorityColor(item.priority)}
-                />
-              )}
+            <View style={[ styles.taskIconBackground, { backgroundColor: getPriorityColor(item?.priority) + "20" }, ]} >
+              <Ionicons name="checkmark" size={20} color="#10B981" />
             </View>
           </View>
           <View style={styles.taskHeaderInfo}>
-            <Text
-              style={[
-                styles.taskTitle,
-                item.status === "overdue" && styles.overdueTaskTitle,
-                item.status === "completed" && styles.completedTaskTitle,
-              ]}
-              numberOfLines={2}
-            >
-              {item.name}
-            </Text>
-            <Text style={styles.taskCategory}>{item.category}</Text>
+            <Text style={[ styles.taskTitle, ]} numberOfLines={2}> {item?.title} </Text>
           </View>
         </View>
         <View style={styles.taskHeaderRight}>
-          {/* Checkbox/Radio Button moved to the right */}
-          {/* <TouchableOpacity
-            style={styles.checkboxContainer}
-            onPress={() => toggleTaskCompletion(item.id)}
-            activeOpacity={0.7}
-          >
-            <View
-              style={[
-                styles.checkbox,
-                item.status === "completed" && styles.checkboxCompleted,
-              ]}
-            >
-              {item.status === "completed" && (
-                <Ionicons name="checkmark" size={16} color="#fff" />
-              )}
-            </View>
-          </TouchableOpacity> */}
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor: getStatusColor(item.status) + "20",
-              },
-            ]}
-          >
-            <Ionicons
-              name={getStatusIcon(item.status)}
-              size={14}
-              color={getStatusColor(item.status)}
-            />
-          </View>
           <TouchableOpacity style={styles.taskMenuButton}>
             <Ionicons name="ellipsis-horizontal" size={18} color="#6B7280" />
           </TouchableOpacity>
         </View>
       </View>
 
-      <Text
-        style={[
-          styles.taskDescription,
-          item.status === "completed" && styles.completedTaskDescription,
-        ]}
-        numberOfLines={2}
-      >
-        {item.description}
-      </Text>
+      {item?.description &&
+        <Text style={[ styles.taskDescription, ]} numberOfLines={2}> {item?.description} </Text>
+      }
 
       <View style={styles.taskInfo}>
+        {item?.project &&
+          <View style={styles.taskInfoItem}>
+            <Ionicons name="folder-outline" size={14} color="#6B7280" />
+            <Text style={styles.taskInfoText}>{item?.project?.title}</Text>
+          </View>
+        }
         <View style={styles.taskInfoItem}>
-          <Ionicons name="folder-outline" size={14} color="#6B7280" />
-          <Text style={styles.taskInfoText}>{item.project}</Text>
-        </View>
-        <View style={styles.taskInfoItem}>
-          <Ionicons name="time-outline" size={14} color="#6B7280" />
-          <Text style={styles.taskInfoText}>{item.estimatedTime}</Text>
-        </View>
-        <View style={styles.taskInfoItem}>
-          <Ionicons
-            name="calendar-outline"
-            size={14}
-            color={item.status === "overdue" ? "#EF4444" : "#6B7280"}
-          />
-          <Text
-            style={[
-              styles.taskInfoText,
-              item.status === "overdue" && styles.overdueText,
-            ]}
-          >
-            {item.status === "completed" && item.completedAt
-              ? item.completedAt
-              : item.dueDate}
-          </Text>
+          <Ionicons name="calendar-outline" size={14} color={"#6B7280"} />
+          <Text style={[ styles.taskInfoText, ]}> {new Date(item.createdAt).toLocaleDateString()}</Text>
         </View>
       </View>
 
       {/* Task Tags */}
-      <View style={styles.taskTags}>
-        {item.tags.slice(0, 3).map((tag, index) => (
-          <View key={index} style={styles.taskTag}>
-            <Text style={styles.taskTagText}>{tag}</Text>
-          </View>
-        ))}
-        {item.tags.length > 3 && (
+      {item?.tags &&
+        <View style={styles.taskTags}>
           <View style={styles.taskTag}>
-            <Text style={styles.taskTagText}>+{item.tags.length - 3}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Subtasks Progress */}
-      {/* <View style={styles.subtasksProgress}>
-        <View style={styles.subtasksInfo}>
-          <Text style={styles.subtasksText}>
-            {getCompletedSubtasks(item.subtasks)}/{item.subtasks.length}{" "}
-            subtasks
-          </Text>
-          <Text style={styles.subtasksPercent}>
-            {getSubtaskProgress(item.subtasks)}%
-          </Text>
-        </View>
-        <View style={styles.subtasksProgressBar}>
-          <View style={styles.subtasksProgressBackground}>
-            <View
-              style={[
-                styles.subtasksProgressFill,
-                {
-                  width: `${getSubtaskProgress(item.subtasks)}%`,
-                  backgroundColor: getStatusColor(item.status),
-                },
-              ]}
-            />
+            <Text style={styles.taskTagText}>{item.tag}</Text>
           </View>
         </View>
-      </View> */}
-
+      }
       <View style={styles.taskFooter}>
         <View style={styles.taskFooterLeft}>
           <View
             style={[
               styles.priorityBadge,
               {
-                backgroundColor: getPriorityColor(item.priority) + "20",
+                backgroundColor: getPriorityColor(item?.priority) + "20",
               },
-              item.status === "completed" && styles.completedPriorityBadge,
             ]}
           >
             <View
               style={[
                 styles.priorityDot,
-                { backgroundColor: getPriorityColor(item.priority) },
-                item.status === "completed" && styles.completedPriorityDot,
+                { backgroundColor: getPriorityColor(item?.priority) },
               ]}
             />
             <Text
               style={[
                 styles.priorityText,
-                { color: getPriorityColor(item.priority) },
-                item.status === "completed" && styles.completedPriorityText,
+                { color: getPriorityColor(item?.priority) },
               ]}
             >
-              {item.priority}
+              {item?.priority}
             </Text>
           </View>
-          <Text
-            style={[
-              styles.taskTime,
-              item.status === "overdue" && styles.overdueTaskTime,
-              item.status === "completed" && styles.completedTaskTime,
-            ]}
-          >
-            {item.status === "completed" ? "Completed" : item.dueTime}
-          </Text>
         </View>
 
         <View style={styles.taskFooterRight}>
           <Text style={styles.assignedByText}>by</Text>
           <View style={styles.assignedBy}>
-            {renderAvatar(item.assignedBy, 20)}
+            {renderAvatar(item?.project?.owner_id, 20)}
           </View>
           <Ionicons name="arrow-forward" size={12} color="#9CA3AF" />
           <View style={styles.assignedTo}>
-            {renderAvatar(item.assignedTo, 24)}
+            {renderAvatar(item?.assignedUsers[0], 24)}
           </View>
         </View>
       </View>
     </TouchableOpacity>
   );
+
+  const renderFilter = useCallback(({ item }) => (
+    <FilterChip
+      title={item.title}
+      count={item.count}
+      isActive={selectedFilter === item.title}
+      onPress={handleFilterPress}
+      color={item.color}
+      icon={item.icon}
+    />
+  ), [selectedFilter, handleFilterPress]);
+
+  const filterStats = useMemo(() => {
+    if (!apiTasks) return {};
+    
+    return {
+      all: apiTasks.length,
+      high: apiTasks.filter(p => p.priority === 'high').length,
+      medium: apiTasks.filter(p => p.priority === 'medium').length,
+      low: apiTasks.filter(p => p.priority === 'low').length,
+    };
+  }, [apiTasks]);
+
+  const filters = useMemo(() => [
+    { 
+      title: "All", 
+      count: filterStats.all, 
+      color: "#1C30A4", 
+      icon: "apps-outline" 
+    },
+    { 
+      title: "High", 
+      count: filterStats.high, 
+      color: "#EF4444", 
+      icon: "flag" 
+    },
+    { 
+      title: "Medium", 
+      count: filterStats.medium, 
+      color: "#F59E0B", 
+      icon: "flag" 
+    },
+    { 
+      title: "Low", 
+      count: filterStats.low, 
+      color: "#10B981", 
+      icon: "flag" 
+    },
+  ], [filterStats]);
+
+    // Focus effect for refreshing data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoading && !isFetching) {
+        refetch();
+      }
+    }, [isLoading, isFetching, refetch])
+  );
+
+  // Loading and error states
+  if (isLoading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Tasks</Text>
+              <View style={styles.headerBadge}>
+                <Text style={styles.headerBadgeText}>
+                  {pagination?.total_items || apiTasks?.length}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.headerSubtitle}>Manage your daily tasks</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={handleCreateTask}
+              style={styles.addButton}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.addButtonText}>New</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color="#9CA3AF" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search tasks, projects, or assignees..."
+              value={searchQuery}
+              onChangeText={handleSearch}
+              placeholderTextColor="#9CA3AF"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => handleSearch("")}>
+                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
+
+  if (isError && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>Tasks</Text>
+          </View>
+        </View>
+        <View style={styles.errorState}>
+          <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorText}>
+            {error?.message || "Failed to load projects"}
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -590,7 +449,9 @@ const Tasks = () => {
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Tasks</Text>
             <View style={styles.headerBadge}>
-              <Text style={styles.headerBadgeText}>{tasks.length}</Text>
+              <Text style={styles.headerBadgeText}>
+                {pagination?.total_items || apiTasks?.length}
+              </Text>
             </View>
           </View>
           <Text style={styles.headerSubtitle}>Manage your daily tasks</Text>
@@ -614,11 +475,11 @@ const Tasks = () => {
             style={styles.searchInput}
             placeholder="Search tasks, projects, or assignees..."
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearch}
             placeholderTextColor="#9CA3AF"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <TouchableOpacity onPress={() => handleSearch("")}>
               <Ionicons name="close-circle" size={20} color="#9CA3AF" />
             </TouchableOpacity>
           )}
@@ -628,261 +489,54 @@ const Tasks = () => {
       {/* Task Overview Stats as Filters */}
       <View style={styles.statsSection}>
         <Text style={styles.statsSectionTitle}>Filter Tasks</Text>
-        <ScrollView
+        <FlatList
           horizontal
+          data={filters}
+          renderItem={renderFilter}
+          keyExtractor={(item) => item.title}
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsScrollContainer}
-          style={styles.statsScrollView}
-        >
-          {/* All Tasks Filter */}
-          <TouchableOpacity
-            style={[
-              styles.progressStatCard,
-              selectedFilter === "All" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("All")}
-          >
-            <View style={styles.progressCardHeader}>
-              <View style={styles.progressIcon}>
-                <Ionicons name="list" size={12} color="#1C30A4" />
-              </View>
-              <Text style={styles.progressCardTitle}>All Tasks</Text>
-            </View>
-            <Text style={styles.progressCardNumber}>
-              {Math.round(
-                tasks.reduce((acc, task) => {
-                  return acc + getSubtaskProgress(task.subtasks);
-                }, 0) / tasks.length
-              )}
-              %
-            </Text>
-            <View style={styles.progressCardBar}>
-              <View style={styles.progressCardBackground}>
-                <View
-                  style={[
-                    styles.progressCardFill,
-                    {
-                      width: `${Math.round(
-                        tasks.reduce((acc, task) => {
-                          return acc + getSubtaskProgress(task.subtasks);
-                        }, 0) / tasks.length
-                      )}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-            <Text style={styles.progressCardSubtext}>Avg Progress</Text>
-          </TouchableOpacity>
-
-          {/* Completed Filter */}
-          <TouchableOpacity
-            style={[
-              styles.statCard,
-              { backgroundColor: "#F0FDF4", borderColor: "#10B981" },
-              selectedFilter === "completed" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("completed")}
-          >
-            <View style={styles.statCardHeader}>
-              <View
-                style={[styles.statCardIcon, { backgroundColor: "#10B981" }]}
-              >
-                <Ionicons name="checkmark-circle" size={10} color="#fff" />
-              </View>
-              <View style={styles.statCardTrend}>
-                <Ionicons name="arrow-up" size={8} color="#10B981" />
-              </View>
-            </View>
-            <Text style={[styles.statCardNumber, { color: "#10B981" }]}>
-              {tasks.filter((t) => t.status === "completed").length}
-            </Text>
-            <Text style={styles.statCardLabel}>Done</Text>
-            <View style={styles.statCardProgress}>
-              <View
-                style={[
-                  styles.statCardProgressBg,
-                  { backgroundColor: "#10B981" + "30" },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statCardProgressFill,
-                    {
-                      width: `${
-                        (tasks.filter((t) => t.status === "completed").length /
-                          tasks.length) *
-                        100
-                      }%`,
-                      backgroundColor: "#10B981",
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* In Progress Filter */}
-          <TouchableOpacity
-            style={[
-              styles.statCard,
-              { backgroundColor: "#EFF6FF", borderColor: "#3B82F6" },
-              selectedFilter === "in-progress" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("in-progress")}
-          >
-            <View style={styles.statCardHeader}>
-              <View
-                style={[styles.statCardIcon, { backgroundColor: "#3B82F6" }]}
-              >
-                <Ionicons name="time" size={10} color="#fff" />
-              </View>
-              <View style={styles.statCardTrend}>
-                <Ionicons name="arrow-up" size={8} color="#3B82F6" />
-              </View>
-            </View>
-            <Text style={[styles.statCardNumber, { color: "#3B82F6" }]}>
-              {tasks.filter((t) => t.status === "in-progress").length}
-            </Text>
-            <Text style={styles.statCardLabel}>Active</Text>
-            <View style={styles.statCardProgress}>
-              <View
-                style={[
-                  styles.statCardProgressBg,
-                  { backgroundColor: "#3B82F6" + "30" },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statCardProgressFill,
-                    {
-                      width: `${
-                        (tasks.filter((t) => t.status === "in-progress")
-                          .length /
-                          tasks.length) *
-                        100
-                      }%`,
-                      backgroundColor: "#3B82F6",
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Pending Filter */}
-          <TouchableOpacity
-            style={[
-              styles.statCard,
-              { backgroundColor: "#FFFBEB", borderColor: "#F59E0B" },
-              selectedFilter === "pending" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("pending")}
-          >
-            <View style={styles.statCardHeader}>
-              <View
-                style={[styles.statCardIcon, { backgroundColor: "#F59E0B" }]}
-              >
-                <Ionicons name="hourglass" size={10} color="#fff" />
-              </View>
-              <View style={styles.statCardTrend}>
-                <Ionicons name="remove" size={8} color="#F59E0B" />
-              </View>
-            </View>
-            <Text style={[styles.statCardNumber, { color: "#F59E0B" }]}>
-              {tasks.filter((t) => t.status === "pending").length}
-            </Text>
-            <Text style={styles.statCardLabel}>Pending</Text>
-            <View style={styles.statCardProgress}>
-              <View
-                style={[
-                  styles.statCardProgressBg,
-                  { backgroundColor: "#F59E0B" + "30" },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statCardProgressFill,
-                    {
-                      width: `${
-                        (tasks.filter((t) => t.status === "pending").length /
-                          tasks.length) *
-                        100
-                      }%`,
-                      backgroundColor: "#F59E0B",
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Overdue Filter */}
-          <TouchableOpacity
-            style={[
-              styles.statCard,
-              { backgroundColor: "#FEF2F2", borderColor: "#EF4444" },
-              selectedFilter === "overdue" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("overdue")}
-          >
-            <View style={styles.statCardHeader}>
-              <View
-                style={[styles.statCardIcon, { backgroundColor: "#EF4444" }]}
-              >
-                <Ionicons name="warning" size={10} color="#fff" />
-              </View>
-              <View style={styles.statCardTrend}>
-                <Ionicons name="arrow-down" size={8} color="#EF4444" />
-              </View>
-            </View>
-            <Text style={[styles.statCardNumber, { color: "#EF4444" }]}>
-              {tasks.filter((t) => t.status === "overdue").length}
-            </Text>
-            <Text style={styles.statCardLabel}>Overdue</Text>
-            <View style={styles.statCardProgress}>
-              <View
-                style={[
-                  styles.statCardProgressBg,
-                  { backgroundColor: "#EF4444" + "30" },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statCardProgressFill,
-                    {
-                      width: `${
-                        (tasks.filter((t) => t.status === "overdue").length /
-                          tasks.length) *
-                        100
-                      }%`,
-                      backgroundColor: "#EF4444",
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
+          contentContainerStyle={styles.filtersContainer}
+        />
       </View>
-
       {/* Tasks List */}
-      <FlatList
-        data={filteredTasks}
-        renderItem={renderTaskCard}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.tasksList}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="checkmark-done-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyStateTitle}>No tasks found</Text>
-            <Text style={styles.emptyStateText}>
-              Try adjusting your search or filter criteria
-            </Text>
-          </View>
-        }
-      />
+      {processedTasks.length === 0 ? (
+        <EmptyState 
+          onCreatePress={handleCreateTask} 
+          searchQuery={searchQuery}
+          type={'task'}
+        />
+      ) : (
+        <OptimizedList
+          ref={listRef}
+          data={processedTasks}
+          renderItem={renderTaskCard}
+          keyExtractor={keyExtractor}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={["#1C30A4"]}
+              tintColor="#1C30A4"
+            />
+          }
+          ListEmptyComponent={
+            <EmptyState 
+              onCreatePress={handleCreateTask} 
+              searchQuery={searchQuery}
+              type={'task'}
+            />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={styles.loadingFooter}>
+                <ActivityIndicator size="small" color="#1C30A4" />
+              </View>
+            ) : null
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -1136,13 +790,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -1262,7 +913,8 @@ const styles = StyleSheet.create({
   },
   taskHeaderLeft: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
     marginRight: 12,
   },
@@ -1441,23 +1093,6 @@ const styles = StyleSheet.create({
   avatarImage: {
     resizeMode: "cover",
   },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#374151",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    textAlign: "center",
-  },
   // Completed task styling
   completedTaskIconBackground: {
     backgroundColor: "#10B981" + "20",
@@ -1467,6 +1102,10 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     textDecorationStyle: "solid",
     textDecorationColor: "#9CA3AF",
+  },
+  filtersContainer: {
+    paddingLeft: 20,
+    paddingRight: 20,
   },
   completedTaskDescription: {
     color: "#9CA3AF",
@@ -1487,6 +1126,76 @@ const styles = StyleSheet.create({
   completedPriorityText: {
     color: "#10B981",
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  retryButton: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#1C30A4',
+    borderRadius: 8,
+  },
+  filterChip: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  activeFilterChip: {
+    backgroundColor: "#1C30A4",
+    borderColor: "#1C30A4",
+    transform: [{ scale: 0.95 }],
+  },
+  filterChipContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    minWidth: 60,
+    justifyContent: "center",
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#374151",
+    marginLeft: 4,
+  },
+  activeFilterChipText: {
+    color: "#fff",
+  },
+  filterChipBadge: {
+    marginLeft: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 8,
+    minWidth: 16,
+    alignItems: "center",
+  },
+  filterChipBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  tasksList:{
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  }
 });
 
 export default Tasks;

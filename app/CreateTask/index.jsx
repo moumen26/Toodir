@@ -14,15 +14,24 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useCreateTask } from "../hooks/useTasks";
+import { useProjects } from "../hooks/useProjects";
+import { useAuthStatus } from "../hooks/useAuth";
 
 const CreateTask = () => {
+  const { user } = useAuthStatus();
+  const createTaskMutation = useCreateTask();
+  const { projects } = useProjects();
+
+  const availableProjects = projects || [];
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     attachments: [],
     color: "",
     icon: "",
-    project: "",
+    project_id: "",
     assignedTo: [],
     priority: "",
     startDate: "",
@@ -122,34 +131,6 @@ const CreateTask = () => {
     { id: 12, name: "code-slash", label: "Code" },
   ];
 
-  const projects = [
-    {
-      id: 1,
-      name: "Dashboard Analytics UI",
-      color: "#3B82F6",
-      icon: "bar-chart",
-    },
-    {
-      id: 2,
-      name: "E-commerce Mobile App",
-      color: "#10B981",
-      icon: "phone-portrait",
-    },
-    {
-      id: 3,
-      name: "Website Redesign",
-      color: "#8B5CF6",
-      icon: "color-palette",
-    },
-    { id: 4, name: "API Integration", color: "#F59E0B", icon: "server" },
-    {
-      id: 5,
-      name: "Mobile Game Development",
-      color: "#EC4899",
-      icon: "game-controller",
-    },
-  ];
-
   const teamMembers = [
     {
       id: 1,
@@ -209,13 +190,13 @@ const CreateTask = () => {
   ];
 
   const weekDays = [
-    { id: 1, short: "Mon", full: "Monday" },
-    { id: 2, short: "Tue", full: "Tuesday" },
-    { id: 3, short: "Wed", full: "Wednesday" },
-    { id: 4, short: "Thu", full: "Thursday" },
-    { id: 5, short: "Fri", full: "Friday" },
-    { id: 6, short: "Sat", full: "Saturday" },
-    { id: 7, short: "Sun", full: "Sunday" },
+    { id: 0, short: "Mon", full: "Monday" },
+    { id: 1, short: "Tue", full: "Tuesday" },
+    { id: 2, short: "Wed", full: "Wednesday" },
+    { id: 3, short: "Thu", full: "Thursday" },
+    { id: 4, short: "Fri", full: "Friday" },
+    { id: 5, short: "Sat", full: "Saturday" },
+    { id: 6, short: "Sun", full: "Sunday" },
   ];
 
   // Date and time data
@@ -287,91 +268,51 @@ const CreateTask = () => {
     }));
   };
 
-  // Mock file upload handlers
-  const handleAttachmentUpload = () => {
-    Alert.alert(
-      "Demo Mode",
-      "File upload functionality will work when you install expo-document-picker. For now, showing mock files.",
-      [
-        {
-          text: "Show Mock Files",
-          onPress: () => {
-            setShowMockFiles(true);
-            handleInputChange("attachments", mockFiles);
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  };
-
-  const removeAttachment = (attachmentId) => {
-    const updatedAttachments = formData.attachments.filter(
-      (att) => att.id !== attachmentId
-    );
-    handleInputChange("attachments", updatedAttachments);
-    if (updatedAttachments.length === 0) {
-      setShowMockFiles(false);
-    }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  const getFileIcon = (type) => {
-    if (type?.includes("image")) return "image";
-    if (type?.includes("pdf")) return "document-text";
-    if (type?.includes("video")) return "videocam";
-    if (type?.includes("audio")) return "musical-notes";
-    if (type?.includes("word") || type?.includes("doc")) return "document-text";
-    if (type?.includes("excel") || type?.includes("sheet")) return "grid";
-    if (type?.includes("powerpoint") || type?.includes("presentation"))
-      return "easel";
-    if (type?.includes("sketch")) return "color-palette";
-    return "document";
-  };
-
-  const handleCreateTask = () => {
-    if (!formData.title.trim()) {
+  const handleCreateTask = async () => {        
+    if (!formData?.title.trim()) {
       Alert.alert("Error", "Task title is required");
       return;
     }
 
-    // Show summary of task data
-    const summary = `
-Task Created Successfully!
+    try {
+      // Prepare task data for API
+      const taskData = {
+        title: formData?.title.trim() || null,
+        description: formData?.description?.trim() || null,
+        color: formData?.color || null,
+        project_id: formData?.project_id || null,
+        priority: formData?.priority?.toLowerCase() || null,
+        start_date: formData?.startDate || null,
+        end_date: formData?.endDate || null,
+        repetition_type: formData?.repeat.type || null,
+        repetition_interval: formData?.repeat.interval || 1,
+        repetition_day_of_week: formData?.repeat.enabled && formData?.repeat.type === 'weekly' 
+          ? formData?.repeat.days.length > 0 
+            ? formData?.repeat.days.map(dayShort => 
+                weekDays.findIndex(day => day.short === dayShort)
+              ).filter(index => index !== -1) // Remove any invalid days
+            : null
+          : null,
+        assigned_users: selectedMembers.map(member => member.id) || [],
+      };
 
-Title: ${formData.title}
-Description: ${formData.description || "No description"}
-Project: ${formData.project || "No project selected"}
-Assigned To: ${selectedMembers.length} members selected
-Priority: ${formData.priority || "No priority set"}
-Color: ${
-      formData.color
-        ? taskColors.find((c) => c.color === formData.color)?.name
-        : "No color"
-    }
-Icon: ${
-      formData.icon
-        ? taskIcons.find((i) => i.name === formData.icon)?.label
-        : "No icon selected"
-    }
-Start Date: ${formData.startDate || "Not set"}
-End Date: ${formData.endDate || "Not set"}
-Start Time: ${formData.startTime || "Not set"}
-End Time: ${formData.endTime || "Not set"}
-Repeat: ${getRepeatSummary()}
-Attachments: ${formData.attachments.length} files
-    `;
+      await createTaskMutation.mutateAsync({
+        taskData,
+      });
 
-    Alert.alert("Task Summary", summary.trim(), [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+      Alert.alert(
+        "Success", 
+        "Task created successfully!",
+        [{ text: "OK" }]
+      );
+
+    } catch (error) {
+      console.log('Error creating task:', error);
+      Alert.alert(
+        "Error", 
+        error.message || "Failed to create task. Please try again."
+      );
+    }
   };
 
   // Date picker handlers
@@ -393,7 +334,7 @@ Attachments: ${formData.attachments.length} files
 
   const handleDateSelect = () => {
     if (selectedDay && selectedMonth && selectedYear) {
-      const dateString = `${selectedDay}/${selectedMonth}/${selectedYear}`;
+      const dateString = `${selectedDay}-${selectedMonth}-${selectedYear}`;
       handleInputChange(datePickerType, dateString);
       setShowDatePicker(false);
     }
@@ -464,8 +405,17 @@ Attachments: ${formData.attachments.length} files
   };
 
   const handleProjectSelect = (project) => {
-    handleInputChange("project", project.name);
+    setFormData(prev => ({
+      ...prev,
+      project_id: project.id  // Store ID instead of name
+    }));
     setShowProjectModal(false);
+  };
+
+  const getSelectedProjectName = () => {
+    if (!formData.project_id) return "Select Project";
+    const project = availableProjects.find(p => p.id === formData.project_id);
+    return project ? project.title : "Select Project";
   };
 
   const handleMemberToggle = (member) => {
@@ -632,62 +582,6 @@ Attachments: ${formData.attachments.length} files
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Attachment Section */}
-        <View style={styles.attachmentSection}>
-          <Text style={styles.sectionTitle}>Attachment</Text>
-          <View style={styles.attachmentContainer}>
-            <TouchableOpacity
-              style={styles.attachmentBox}
-              onPress={handleAttachmentUpload}
-            >
-              <View style={styles.attachmentIcon}>
-                <Ionicons
-                  name="cloud-upload-outline"
-                  size={32}
-                  color="#1C30A4"
-                />
-              </View>
-              <Text style={styles.attachmentText}>Upload task files</Text>
-              <Text style={styles.attachmentSubtext}>
-                Tap to select files (Demo)
-              </Text>
-            </TouchableOpacity>
-
-            {/* Display uploaded files */}
-            {showMockFiles && formData.attachments.length > 0 && (
-              <View style={styles.uploadedFilesContainer}>
-                <Text style={styles.uploadedFilesTitle}>Uploaded Files:</Text>
-                {formData.attachments.map((attachment) => (
-                  <View key={attachment.id} style={styles.fileItem}>
-                    <View style={styles.fileInfo}>
-                      <View style={styles.fileIconContainer}>
-                        <Ionicons
-                          name={getFileIcon(attachment.type)}
-                          size={20}
-                          color="#1C30A4"
-                        />
-                      </View>
-                      <View style={styles.fileDetails}>
-                        <Text style={styles.fileName} numberOfLines={1}>
-                          {attachment.name}
-                        </Text>
-                        <Text style={styles.fileSize}>
-                          {formatFileSize(attachment.size)}
-                        </Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeFileButton}
-                      onPress={() => removeAttachment(attachment.id)}
-                    >
-                      <Ionicons name="close-circle" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
 
         {/* Task Title */}
         {renderFormSection(
@@ -734,10 +628,10 @@ Attachments: ${formData.attachments.length} files
                   style={[
                     styles.dropdownText,
                     { marginLeft: 8 },
-                    !formData.project && styles.placeholderText,
+                    !formData.project_id && styles.placeholderText,
                   ]}
                 >
-                  {formData.project || "Select Project"}
+                  {getSelectedProjectName()}
                 </Text>
               </View>
               <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
@@ -1330,10 +1224,16 @@ Attachments: ${formData.attachments.length} files
         {/* Create Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={styles.createButton}
+            style={[
+              styles.createButton,
+              createTaskMutation.isLoading && styles.createButtonDisabled
+            ]}
             onPress={handleCreateTask}
+            disabled={createTaskMutation.isLoading}
           >
-            <Text style={styles.createButtonText}>Create Task</Text>
+            <Text style={styles.createButtonText}>
+              {createTaskMutation.isLoading ? "Creating..." : "Create Task"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1477,13 +1377,12 @@ Attachments: ${formData.attachments.length} files
               style={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {projects.map((project) => (
+              {availableProjects.map((project) => (
                 <TouchableOpacity
                   key={project.id}
                   style={[
                     styles.optionItem,
-                    formData.project === project.name &&
-                      styles.selectedOptionItem,
+                    formData.project_id === project.id && styles.selectedOptionItem,
                   ]}
                   onPress={() => handleProjectSelect(project)}
                   activeOpacity={0.7}
@@ -1492,26 +1391,25 @@ Attachments: ${formData.attachments.length} files
                     <View
                       style={[
                         styles.tagColorDot,
-                        { backgroundColor: project.color },
+                        { backgroundColor: '#1C30A4' },
                       ]}
                     />
                     <Ionicons
-                      name={project.icon}
+                      name={'folder'}
                       size={20}
-                      color={project.color}
+                      color={'#1C30A4'}
                       style={styles.optionIcon}
                     />
                     <Text
                       style={[
                         styles.optionText,
-                        formData.project === project.name &&
-                          styles.selectedOptionText,
+                        formData.project_id === project.id && styles.selectedOptionText,
                       ]}
                     >
-                      {project.name}
+                      {project.title}
                     </Text>
                   </View>
-                  {formData.project === project.name && (
+                  {formData.project_id === project.id && (
                     <Ionicons name="checkmark" size={20} color="#1C30A4" />
                   )}
                 </TouchableOpacity>
@@ -2016,6 +1914,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#6B7280",
     marginBottom: 8,
+  },
+  createButtonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0.1,
   },
   fileItem: {
     flexDirection: "row",

@@ -14,8 +14,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useCreateProject } from "../hooks/useProjects";
+import { useAuthStatus } from "../hooks/useAuth";
 
 const CreateProject = () => {
+  const { user } = useAuthStatus();
+  const createProjectMutation = useCreateProject();
+
   const [formData, setFormData] = useState({
     title: "",
     cover: null,
@@ -298,37 +303,50 @@ const CreateProject = () => {
     return "document";
   };
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     if (!formData.title.trim()) {
       Alert.alert("Error", "Project title is required");
       return;
     }
 
-    // Show summary of project data
-    const summary = `
-Project Created Successfully!
+    try {
+      // Prepare project data for API
+      const projectData = {
+        title: formData.title.trim() || null,
+        description: formData.description?.trim() || null,
+        priority: formData.priority?.toLowerCase() || 'low',
+        start_date: formData.startDate || null,
+        end_date: formData.endDate || null,
+        members: selectedMembers.map(member => member.id) || null,
+        attachments: formData.attachments || []
+      };
 
-Title: ${formData.title}
-Description: ${formData.description || "No description"}
-Tag: ${formData.tag || "No tag selected"}
-Icon: ${
-      formData.icon
-        ? projectIcons.find((i) => i.name === formData.icon)?.label
-        : "No icon selected"
+      // Handle tag selection
+      if (formData.tag) {
+        const selectedTag = projectTags.find(tag => tag.name === formData.tag);
+        if (selectedTag) {
+          projectData.tag = selectedTag.id;
+        }
+      }
+
+      await createProjectMutation.mutateAsync({
+        projectData,
+        images: projectData.attachments || []
+      });
+
+      Alert.alert(
+        "Success", 
+        "Project created successfully!",
+        [{ text: "OK" }]
+      );
+
+    } catch (error) {
+      console.log('Error creating project:', error);
+      Alert.alert(
+        "Error", 
+        error.message || "Failed to create project. Please try again."
+      );
     }
-Members: ${selectedMembers.length} selected
-Priority: ${formData.priority || "No priority set"}
-Start Date: ${formData.startDate || "Not set"}
-End Date: ${formData.endDate || "Not set"}
-Start Time: ${formData.startTime || "Not set"}
-End Time: ${formData.endTime || "Not set"}
-Attachments: ${formData.attachments.length} files
-Cover Image: ${formData.cover ? "Added" : "None"}
-    `;
-
-    Alert.alert("Project Summary", summary.trim(), [
-      { text: "OK", onPress: () => router.back() },
-    ]);
   };
 
   // Date picker handlers
@@ -350,7 +368,7 @@ Cover Image: ${formData.cover ? "Added" : "None"}
 
   const handleDateSelect = () => {
     if (selectedDay && selectedMonth && selectedYear) {
-      const dateString = `${selectedDay}/${selectedMonth}/${selectedYear}`;
+      const dateString = `${selectedDay}-${selectedMonth}-${selectedYear}`;
       handleInputChange(datePickerType, dateString);
       setShowDatePicker(false);
     }
@@ -689,37 +707,6 @@ Cover Image: ${formData.cover ? "Added" : "None"}
           </View>
         )}
 
-        {/* Project Icon */}
-        {renderFormSection(
-          "Project Icon",
-          <View style={styles.inputContainer}>
-            <TouchableOpacity
-              style={styles.dropdownButton}
-              onPress={() => setShowIconModal(true)}
-            >
-              <View style={styles.dropdownContent}>
-                {formData.icon ? (
-                  <Ionicons name={formData.icon} size={16} color="#1C30A4" />
-                ) : (
-                  <Ionicons name="apps-outline" size={16} color="#1C30A4" />
-                )}
-                <Text
-                  style={[
-                    styles.dropdownText,
-                    { marginLeft: 8 },
-                    !formData.icon && styles.placeholderText,
-                  ]}
-                >
-                  {formData.icon
-                    ? projectIcons.find((i) => i.name === formData.icon)?.label
-                    : "Select Project Icon"}
-                </Text>
-              </View>
-              <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Members */}
         {renderFormSection(
           "Members",
@@ -871,24 +858,6 @@ Cover Image: ${formData.cover ? "Added" : "None"}
             </TouchableOpacity>
           )}
 
-          {/* Add Time Button */}
-          {!showTimeSection && (
-            <TouchableOpacity
-              style={styles.addSectionButton}
-              onPress={() => setShowTimeSection(true)}
-            >
-              <View style={styles.addSectionContent}>
-                <Ionicons name="time-outline" size={20} color="#1C30A4" />
-                <View style={styles.addSectionContentCol}>
-                  <Text style={styles.addSectionText}>Add Project Times</Text>
-                  <Text style={styles.addSectionSubtext}>
-                    Set start and end times
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="add" size={20} color="#1C30A4" />
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Date Section - Only show when enabled */}
@@ -966,80 +935,19 @@ Cover Image: ${formData.cover ? "Added" : "None"}
             </View>
           )}
 
-        {/* Time Section - Only show when enabled */}
-        {showTimeSection &&
-          renderFormSection(
-            "Time",
-            <View style={styles.timeContainer}>
-              <View style={styles.sectionHeaderWithRemove}>
-                <Text style={styles.inputLabel}>Working Hours</Text>
-                <TouchableOpacity
-                  style={styles.removeSectionButton}
-                  onPress={() => {
-                    setShowTimeSection(false);
-                    handleInputChange("startTime", "");
-                    handleInputChange("endTime", "");
-                  }}
-                >
-                  <Ionicons name="close" size={16} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.dateRow}>
-                <View
-                  style={[styles.inputContainer, { flex: 1, marginRight: 6 }]}
-                >
-                  <Text style={styles.inputLabel}>Start Time</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownButton}
-                    onPress={() => handleTimePress("startTime")}
-                  >
-                    <View style={styles.dropdownContent}>
-                      <Ionicons name="time-outline" size={16} color="#1C30A4" />
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          { marginLeft: 8 },
-                          !formData.startTime && styles.placeholderText,
-                        ]}
-                      >
-                        {formData.startTime || "Select Time"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-                <View
-                  style={[styles.inputContainer, { flex: 1, marginLeft: 6 }]}
-                >
-                  <Text style={styles.inputLabel}>End Time</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownButton}
-                    onPress={() => handleTimePress("endTime")}
-                  >
-                    <View style={styles.dropdownContent}>
-                      <Ionicons name="time-outline" size={16} color="#1C30A4" />
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          { marginLeft: 8 },
-                          !formData.endTime && styles.placeholderText,
-                        ]}
-                      >
-                        {formData.endTime || "Select Time"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          )}
-
         {/* Create Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={styles.createButton}
+            style={[
+              styles.createButton,
+              createProjectMutation.isLoading && styles.createButtonDisabled
+            ]}
             onPress={handleCreateProject}
+            disabled={createProjectMutation.isLoading}
           >
-            <Text style={styles.createButtonText}>Create Project</Text>
+            <Text style={styles.createButtonText}>
+              {createProjectMutation.isLoading ? "Creating..." : "Create Project"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -2580,6 +2488,10 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 16,
     fontWeight: "500",
+  },
+  createButtonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0.1,
   },
 });
 

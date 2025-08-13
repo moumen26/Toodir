@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ProjectProvider } from "./context/ProjectContext";
+import { TaskProvider } from "./context/TaskContext";
+import { CommentProvider } from "./context/CommentContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,94 +41,98 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <ProjectProvider>
-            <AuthContextProvider>
-              <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen 
-                  name="index" 
-                  options={{
-                    headerShown: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="SignIn/index"
-                  options={{
-                    headerShown: false,
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="(tabs)"
-                  options={{
-                    headerShown: false,
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="SignUp/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "card",
-                  }}
-                />
-                <Stack.Screen
-                  name="ForgotPassword/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "card",
-                  }}
-                />
-                <Stack.Screen
-                  name="ProjectDetails/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "card",
-                  }}
-                />
-                <Stack.Screen
-                  name="CreateProject/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "modal",
-                  }}
-                />
-                <Stack.Screen
-                  name="CreateTask/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "modal",
-                  }}
-                />
-                <Stack.Screen
-                  name="CreateHabit/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "modal",
-                  }}
-                />
-                <Stack.Screen
-                  name="Profile/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "transparentModal",
-                  }}
-                />
-                <Stack.Screen
-                  name="ProfileInfo/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "transparentModal",
-                  }}
-                />
-                <Stack.Screen
-                  name="Statistics/index"
-                  options={{
-                    headerShown: false,
-                    presentation: "pageSheet",
-                  }}
-                />
-              </Stack>
-            </AuthContextProvider>
+            <TaskProvider>
+              <CommentProvider>
+                <AuthContextProvider>
+                  <StatusBar style="auto" />
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen 
+                      name="index" 
+                      options={{
+                        headerShown: false,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="SignIn/index"
+                      options={{
+                        headerShown: false,
+                        gestureEnabled: false,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="(tabs)"
+                      options={{
+                        headerShown: false,
+                        gestureEnabled: false,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="SignUp/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "card",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="ForgotPassword/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "card",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="ProjectDetails/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "card",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="CreateProject/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "modal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="CreateTask/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "modal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="CreateHabit/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "modal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="Profile/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "transparentModal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="ProfileInfo/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "transparentModal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="Statistics/index"
+                      options={{
+                        headerShown: false,
+                        presentation: "pageSheet",
+                      }}
+                    />
+                  </Stack>
+                </AuthContextProvider>
+              </CommentProvider>
+            </TaskProvider>
           </ProjectProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

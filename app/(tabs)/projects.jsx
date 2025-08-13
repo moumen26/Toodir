@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
+import React, { useState, useMemo, useCallback, useRef, memo } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   FlatList,
   Image,
   SafeAreaView,
@@ -21,9 +20,11 @@ import {
   useDeleteProject,
   usePrefetchProject,
 } from "../hooks/useProjects";
+import LoadingState from '../components/LoadingState'
+import EmptyState from '../components/EmptyState'
 
 // Optimized VirtualizedList for better performance than FlatList
-const OptimizedList = React.memo(({ 
+const OptimizedList = memo(({ 
   data, 
   renderItem, 
   keyExtractor, 
@@ -58,7 +59,7 @@ const OptimizedList = React.memo(({
 });
 
 // Memoized ProjectCard with performance optimizations
-const ProjectCard = React.memo(({ 
+const ProjectCard = memo(({ 
   item, 
   onPress, 
   onMenuPress, 
@@ -200,18 +201,20 @@ const ProjectCard = React.memo(({
         </Text>
       )}
 
-      <View style={styles.projectInfo}>
-        <View style={styles.projectInfoItem}>
-          <Ionicons name="person-outline" size={14} color="#6B7280" />
-          <Text style={styles.projectInfoText}>{item.owner?.full_name}</Text>
+      {item.end_date &&
+        <View style={styles.projectInfo}>
+          <View style={styles.projectInfoItem}>
+            <Ionicons name="person-outline" size={14} color="#6B7280" />
+            <Text style={styles.projectInfoText}>{item.owner?.full_name}</Text>
+          </View>
+          <View style={styles.projectInfoItem}>
+            <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+            <Text style={styles.projectInfoText}>
+              {new Date(item.end_date).toLocaleDateString()}
+            </Text>
+          </View>
         </View>
-        <View style={styles.projectInfoItem}>
-          <Ionicons name="calendar-outline" size={14} color="#6B7280" />
-          <Text style={styles.projectInfoText}>
-            {new Date(item.end_date).toLocaleDateString()}
-          </Text>
-        </View>
-      </View>
+      }
 
       <View style={styles.projectStats}>
         <View style={styles.projectTeam}>
@@ -309,7 +312,7 @@ const ProjectCard = React.memo(({
   );
 });
 
-const FilterChip = React.memo(({ 
+const FilterChip = memo(({ 
   title, 
   count, 
   isActive, 
@@ -358,37 +361,6 @@ const FilterChip = React.memo(({
   );
 });
 
-const EmptyState = React.memo(({ onCreatePress, searchQuery }) => (
-  <View style={styles.emptyState}>
-    <Ionicons name="folder-open-outline" size={64} color="#D1D5DB" />
-    <Text style={styles.emptyStateTitle}>
-      {searchQuery ? "No projects found" : "No projects yet"}
-    </Text>
-    <Text style={styles.emptyStateText}>
-      {searchQuery 
-        ? "Try adjusting your search or filter criteria"
-        : "Create your first project to get started"
-      }
-    </Text>
-    {!searchQuery && (
-      <TouchableOpacity 
-        style={styles.emptyStateButton}
-        onPress={onCreatePress}
-      >
-        <Ionicons name="add" size={20} color="#fff" />
-        <Text style={styles.emptyStateButtonText}>Create Project</Text>
-      </TouchableOpacity>
-    )}
-  </View>
-));
-
-const LoadingState = React.memo(() => (
-  <View style={styles.loadingState}>
-    <ActivityIndicator size="large" color="#1C30A4" />
-    <Text style={styles.loadingText}>Loading projects...</Text>
-  </View>
-));
-
 const Projects = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
@@ -425,10 +397,10 @@ const Projects = () => {
       ...project,
       progress: Math.round(
         project.tasks?.length > 0
-          ? (project.tasks.filter(task => task.status === 'completed').length / project.tasks.length) * 100
+          ? (project.tasks.filter(task => task.closed).length / project.tasks.length) * 100
           : 0
       ),
-      tasks_completed: project.tasks?.filter(task => task.status === 'completed').length || 0,
+      tasks_completed: project.tasks?.filter(task => task.closed).length || 0,
       total_tasks: project.tasks?.length || 0,
     }));
   }, [projects]);
@@ -983,6 +955,7 @@ const Projects = () => {
         <EmptyState 
           onCreatePress={handleCreateProject} 
           searchQuery={searchQuery}
+          type={'project'}
         />
       ) : (
         <OptimizedList
@@ -1002,6 +975,7 @@ const Projects = () => {
             <EmptyState 
               onCreatePress={handleCreateProject} 
               searchQuery={searchQuery}
+              type={'project'}
             />
           }
           onEndReached={handleLoadMore}
@@ -1386,41 +1360,7 @@ const styles = StyleSheet.create({
   avatarImage: {
     resizeMode: "cover",
   },
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#374151",
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  emptyStateButton: {
-    backgroundColor: "#1C30A4",
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  emptyStateButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
+
   loadingState: {
     flex: 1,
     alignItems: "center",

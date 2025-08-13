@@ -280,36 +280,6 @@ export const useSetPrimaryImage = () => {
   });
 };
 
-// Hook for adding project member
-export const useAddProjectMember = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ projectId, userId }) =>
-      projectService.addProjectMember(projectId, userId),
-    onSuccess: (data, { projectId }) => {
-      queryClient.invalidateQueries({
-        queryKey: projectKeys.detail(projectId),
-      });
-    },
-  });
-};
-
-// Hook for removing project member
-export const useRemoveProjectMember = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ projectId, memberId }) =>
-      projectService.removeProjectMember(projectId, memberId),
-    onSuccess: (data, { projectId }) => {
-      queryClient.invalidateQueries({
-        queryKey: projectKeys.detail(projectId),
-      });
-    },
-  });
-};
-
 // Hook for project search with debouncing
 export const useProjectSearch = (searchQuery, delay = 300) => {
   const debouncedQuery = useDebounce(searchQuery, delay);

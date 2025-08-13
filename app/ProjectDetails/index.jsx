@@ -11,7 +11,13 @@ import {
   TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "expo-router";
+import { useNavigation, useLocalSearchParams } from "expo-router";
+import { useProject, useProjectStats } from "../hooks/useProjects";
+import { useTasksByProject } from "../hooks/useTasks";
+import { useTaskComments, useCreateComment } from "../hooks/useTaskComments";
+import { useAuthStatus } from "../hooks/useAuth";
+import Constants from 'expo-constants';
+import LoadingState from '../components/LoadingState'
 
 const ProjectDetails = () => {
   const [selectedTab, setSelectedTab] = useState("Overview");
@@ -20,145 +26,402 @@ const ProjectDetails = () => {
   const [newProjectComment, setNewProjectComment] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState("");
+  const [expandedAssignedUsers, setExpandedAssignedUsers] = useState({});
 
-  // Sample project data
-  const project = {
-    id: 1,
-    name: "E-commerce Mobile App",
-    category: "Mobile Development",
-    progress: 75,
-    status: "In Progress",
-    priority: "High",
-    dueDate: "2025-01-15",
-    client: "TechCorp Inc.",
-    description:
-      "Complete mobile shopping platform with payment integration and user management system. This project includes modern UI/UX design, secure payment processing, inventory management, and real-time notifications.",
-    budget: "$45,000",
-    spent: "$33,750",
-    teamMembers: [
-      {
-        id: 1,
-        avatar: null,
-        name: "John Doe",
-        role: "Lead Developer",
-        status: "online",
-      },
-      {
-        id: 2,
-        avatar: null,
-        name: "Jane Smith",
-        role: "UI/UX Designer",
-        status: "away",
-      },
-      {
-        id: 3,
-        avatar: null,
-        name: "Mike Johnson",
-        role: "Backend Developer",
-        status: "online",
-      },
-      {
-        id: 4,
-        avatar: null,
-        name: "Sarah Wilson",
-        role: "QA Tester",
-        status: "offline",
-      },
-    ],
-    tasks: [
-      {
-        id: 1,
-        title: "Design user authentication flow",
-        status: "completed",
-        assignee: "Jane Smith",
-        dueDate: "2024-12-20",
-        priority: "High",
-      },
-      {
-        id: 2,
-        title: "Implement payment gateway",
-        status: "in-progress",
-        assignee: "John Doe",
-        dueDate: "2025-01-05",
-        priority: "High",
-      },
-      {
-        id: 3,
-        title: "Create product catalog API",
-        status: "in-progress",
-        assignee: "Mike Johnson",
-        dueDate: "2025-01-08",
-        priority: "Medium",
-      },
-      {
-        id: 4,
-        title: "Set up testing environment",
-        status: "pending",
-        assignee: "Sarah Wilson",
-        dueDate: "2025-01-10",
-        priority: "Low",
-      },
-      {
-        id: 5,
-        title: "Mobile app optimization",
-        status: "pending",
-        assignee: "John Doe",
-        dueDate: "2025-01-12",
-        priority: "Medium",
-      },
-    ],
-    files: [
-      {
-        id: 1,
-        name: "UI_Mockups.fig",
-        type: "figma",
-        size: "2.4 MB",
-        uploadedBy: "Jane Smith",
-        date: "2024-12-18",
-      },
-      {
-        id: 2,
-        name: "API_Documentation.pdf",
-        type: "pdf",
-        size: "1.2 MB",
-        uploadedBy: "Mike Johnson",
-        date: "2024-12-19",
-      },
-      {
-        id: 3,
-        name: "Project_Requirements.docx",
-        type: "document",
-        size: "856 KB",
-        uploadedBy: "John Doe",
-        date: "2024-12-15",
-      },
-    ],
-    comments: [
-      {
-        id: 1,
-        author: "John Doe",
-        content:
-          "Great progress on the authentication module! The flow looks smooth.",
-        time: "2 hours ago",
-        avatar: null,
-      },
-      {
-        id: 2,
-        author: "Jane Smith",
-        content:
-          "Updated the design mockups based on client feedback. Please review.",
-        time: "5 hours ago",
-        avatar: null,
-      },
-      {
-        id: 3,
-        author: "Mike Johnson",
-        content: "API endpoints are ready for testing. Documentation uploaded.",
-        time: "1 day ago",
-        avatar: null,
-      },
-    ],
+  // Helper function to toggle assigned users visibility
+  const toggleAssignedUsers = (taskId) => {
+    setExpandedAssignedUsers(prev => ({
+      ...prev,
+      [taskId]: !prev[taskId]
+    }));
   };
+
+  const FILES_URL = Constants.expoConfig?.extra?.filesUrl;
+
+  // Get project ID from route params
+  const { projectId } = useLocalSearchParams();
+  
+  // Add API hooks
+  const { user } = useAuthStatus();
+  const { project, isLoading: projectLoading, error: projectError } = useProject(projectId);
+  const { stats } = useProjectStats(projectId);
+  const createCommentMutation = useCreateComment();
+
+  // Process project data for display
+  const displayProject = {
+    ...project,
+  };  
+
+  // Handle task comment creation
+  const handleAddComment = async (taskId) => {
+    if (!newComment.trim()) return;
+
+    try {
+      await createCommentMutation.mutateAsync({
+        taskId,
+        commentData: {
+          content: newComment.trim(),
+          parent_comment_id: null,
+        }
+      });
+
+      setNewComment("");
+    } catch (error) {
+      console.log("Failed to add comment");
+    }
+  };
+
+  // Update renderOverviewTab to use real data
+  const renderOverviewTab = () => (
+    <View style={styles.tabContent}>
+      {/* Project Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>
+            {displayProject?.tasks.filter((t) => t.closed).length}/
+            {displayProject?.tasks.length}
+          </Text>
+          <Text style={styles.statLabel}>Tasks</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{displayProject?.members.length}</Text>
+          <Text style={styles.statLabel}>Team</Text>
+        </View>
+      </View>
+
+      {/* Description */}
+      {displayProject.description &&
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Description</Text>
+          <Text style={styles.description}>{displayProject.description}</Text>
+        </View>
+      }
+
+      {/* Project Details */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Project Details</Text>
+        <View style={styles.detailsContainer}>
+          <View style={styles.detailItem}>
+            <Ionicons name="person-outline" size={16} color="#6B7280" />
+            <Text style={styles.detailLabel}>Owner</Text>
+            <Text style={styles.detailValue}>{project.owner?.full_name || 'Unknown'}</Text>
+          </View>
+          {displayProject.end_date && 
+            <>
+              <View style={styles.detailItem}>
+                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                <Text style={styles.detailLabel}>Start date</Text>
+                <Text style={styles.detailValue}>{new Date(displayProject.start_date).toLocaleDateString()}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Ionicons name="calendar-outline" size={16} color="#6B7280" />
+                <Text style={styles.detailLabel}>End date</Text>
+                <Text style={styles.detailValue}>{new Date(displayProject.end_date).toLocaleDateString()}</Text>
+              </View>
+            </>
+          }
+          <View style={styles.detailItem}>
+            <Ionicons name="time-outline" size={16} color="#6B7280" />
+            <Text style={styles.detailLabel}>Created</Text>
+            <Text style={styles.detailValue}>
+              {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Rest remains the same but with real comment handling */}
+    </View>
+  );
+
+  // Update renderTasksTab to use real data
+  const renderTasksTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Tasks ({displayProject?.tasks.length})</Text>
+        <TouchableOpacity onPress={handleAddTask} style={styles.addTaskButton}>
+          <Ionicons name="add" size={16} color="#1C30A4" />
+          <Text style={styles.addTaskText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+
+      {displayProject?.tasks.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text>No tasks yet</Text>
+        </View>
+      ) : (
+        displayProject.tasks.map((task) => (         
+          <View key={task?.id} style={styles.taskCard}>
+            <TouchableOpacity onPress={() => handleTaskPress(task)}>
+              <View style={styles.taskHeader}>
+                <Text style={styles.taskTitle}>{task.title}</Text>
+                <View style={styles.taskHeaderRight}>
+                  <View
+                    style={[
+                      styles.priorityBadge,
+                      { backgroundColor: getPriorityColor(task.priority) + "20" },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.priorityDot,
+                        { backgroundColor: getPriorityColor(task.priority) },
+                      ]}
+                    />
+                    <Text
+                      style={[
+                        styles.priorityText,
+                        { color: getPriorityColor(task.priority) },
+                      ]}
+                    >
+                      {task.priority}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={
+                      expandedTask === task.id ? "chevron-up" : "chevron-down"
+                    }
+                    size={16}
+                    color="#9CA3AF"
+                    style={styles.expandIcon}
+                  />
+                </View>
+              </View>
+              {task.description &&
+                <View style={styles.taskHeader}>
+                    <Text style={styles.projectCategory}>{task.description}</Text>
+                </View>
+              }
+              <View style={styles.taskDetails}>
+                <View style={styles.taskLeftDetails}>
+                  {task.end_date &&
+                    <View style={styles.taskDetail}>
+                      <Ionicons name="calendar-outline" size={12} color="#6B7280" />
+                      <Text style={styles.taskDetailText}>
+                        {new Date(task.end_date).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  }
+                  <View style={styles.taskDetail}>
+                    <Ionicons name="person-outline" size={12} color="#6B7280" />
+                    <View style={styles.assignedUsersContainer}>
+                      <Text style={styles.taskDetailText}>
+                        {task.assignedUsers[0]?.full_name || 'Unassigned'}
+                      </Text>
+                      {/* Show "more" button if there are additional users */}
+                      {task.assignedUsers && task.assignedUsers.length > 1 && (
+                        <TouchableOpacity 
+                          onPress={() => toggleAssignedUsers(task.id)}
+                          style={styles.moreButton}
+                        >
+                          <Text style={styles.moreButtonText}>
+                            {expandedAssignedUsers[task.id] ? 'less' : `+${task.assignedUsers.length - 1} more`}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      
+                      {/* Show additional assigned users when expanded */}
+                      {expandedAssignedUsers[task.id] && task.assignedUsers.slice(1).map((user, index) => (
+                        <Text key={`${task.id}-user-${index}`} style={styles.additionalUserText}>
+                          {user.full_name}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            {/* Expanded Comments Section */}
+            {expandedTask === task.id && (
+              <TaskCommentSection
+                taskId={task.id}
+                newComment={newComment}
+                setNewComment={setNewComment}
+                onAddComment={() => handleAddComment(task.id)}
+              />
+            )}
+          </View>
+        ))
+      )}
+    </View>
+  );
+
+  // Create a separate component for task comments to optimize performance
+  const TaskCommentSection = ({ taskId, newComment, setNewComment, onAddComment }) => {
+    const { comments, isLoading: commentsLoading } = useTaskComments(taskId);    
+    return (
+      <View style={styles.commentsSection}>
+        <View style={styles.commentsDivider} />
+
+        <View style={styles.commentsHeader}>
+          <Text style={styles.commentsTitle}>
+            Comments ({comments?.length || 0})
+          </Text>
+        </View>
+
+        {commentsLoading ? (
+          <View style={styles.loadingContainer}>
+            <LoadingState />
+          </View>
+        ) : comments && comments.length > 0 ? (
+          comments.map((comment) => (
+            <View key={comment.id} style={styles.taskCommentCard}>
+              <View style={styles.taskCommentHeader}>
+                {renderAvatar(
+                  { avatar: comment.author.profile_picture, name: comment.author.full_name },
+                  20
+                )}
+                <View style={styles.taskCommentInfo}>
+                  <Text style={styles.taskCommentAuthor}>
+                    {comment.author.full_name}
+                  </Text>
+                  <Text style={styles.taskCommentTime}>
+                    {new Date(comment.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.taskCommentText}>
+                {comment.content}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.noCommentsText}>No comments yet</Text>
+        )}
+
+        {/* Add Comment Input */}
+        <View style={styles.addCommentContainer}>
+          <View style={styles.addCommentInputContainer}>
+            <TextInput
+              style={styles.addCommentInput}
+              placeholder="Add a comment..."
+              value={newComment}
+              onChangeText={setNewComment}
+              multiline
+              placeholderTextColor="#9CA3AF"
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendCommentButton,
+                !newComment.trim() && styles.sendCommentButtonDisabled,
+              ]}
+              onPress={onAddComment}
+              disabled={!newComment.trim() || createCommentMutation.isLoading}
+            >
+              <Ionicons
+                name="send"
+                size={16}
+                color={newComment.trim() ? "#1C30A4" : "#9CA3AF"}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // Update renderTeamTab to use real data
+  const renderTeamTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          Team Members ({displayProject?.members.length})
+        </Text>
+        <TouchableOpacity onPress={handleAddMembers} style={styles.addTaskButton}>
+          <Ionicons name="add" size={16} color="#1C30A4" />
+          <Text style={styles.addTaskText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+      {displayProject.members.map((member) => (
+        <TouchableOpacity
+          key={member.id}
+          style={styles.memberCard}
+          onPress={() => handleMemberPress(member)}
+        >
+          <View style={styles.memberInfo}>
+            <View style={styles.memberAvatarContainer}>
+              {renderAvatar(member, 40)}
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: '#10B981' }, // Default to online
+                ]}
+              />
+            </View>
+            <View style={styles.memberDetails}>
+              <Text style={styles.memberName}>{member.full_name}</Text>
+              <Text style={styles.memberRole}>{member.role || 'Team Member'}</Text>
+            </View>
+          </View>
+          <View style={styles.memberStatus}>
+            <Text
+              style={[
+                styles.statusText,
+                { color: '#10B981' }, // Default to online
+              ]}
+            >
+              online
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </View>
+        </TouchableOpacity>
+      ))}
+      
+      {displayProject.members.length === 0 && (
+        <View style={styles.emptyState}>
+          <Text>No team members yet</Text>
+        </View>
+      )}
+    </View>
+  );
+
+  // Update renderFilesTab to use real data
+  const renderFilesTab = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          Project Files ({displayProject?.images.length})
+        </Text>
+        <TouchableOpacity onPress={handleAddFiles} style={styles.addTaskButton}>
+          <Ionicons name="add" size={16} color="#1C30A4" />
+          <Text style={styles.addTaskText}>Add</Text>
+        </TouchableOpacity>
+      </View>
+      {displayProject?.images.length > 0 ? (
+        displayProject?.images.map((file) => (
+          <TouchableOpacity
+            key={file.id}
+            style={styles.fileCard}
+            onPress={() => handleFilePress(file)}
+          >
+            <View style={styles.fileInfo}>
+              <View style={styles.fileIcon}>
+                <Ionicons
+                  name="image-outline"
+                  size={24}
+                  color="#1C30A4"
+                />
+              </View>
+              <View style={styles.fileDetails}>
+                <Text style={styles.fileName}>{file.image_url}</Text>
+                <Text style={styles.fileMetadata}>
+                  Image
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.downloadButton}>
+              <Ionicons name="download-outline" size={20} color="#6B7280" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        ))
+      ) : (
+        <View style={styles.emptyState}>
+          <Text>No files uploaded yet</Text>
+        </View>
+      )}
+    </View>
+  );
 
   const navigation = useNavigation();
   const tabs = ["Overview", "Tasks", "Team", "Files"];
@@ -175,47 +438,18 @@ const ProjectDetails = () => {
     Alert.alert("Add Task", "Create new task");
   };
 
+  const handleAddMembers = () => {
+    Alert.alert("Add members", "Add new members");
+  };
+
+  const handleAddFiles = () => {
+    Alert.alert("Add files", "Add new files");
+  };
+
   const handleTaskPress = (task) => {
     setExpandedTask(expandedTask === task.id ? null : task.id);
   };
-
-  const handleAddComment = (taskId) => {
-    if (newComment.trim()) {
-      // Here you would typically add the comment to your state/database
-      Alert.alert("Comment Added", `Comment added to task: ${newComment}`);
-      setNewComment("");
-    }
-  };
-
-  const handleAddProjectComment = () => {
-    if (newProjectComment.trim()) {
-      Alert.alert("Comment Added", `Project comment: ${newProjectComment}`);
-      setNewProjectComment("");
-    }
-  };
-
-  const handleLikeComment = (commentId) => {
-    Alert.alert("Like", `Liked comment ${commentId}`);
-  };
-
-  const handleReplyToComment = (commentId, commentAuthor) => {
-    setReplyingTo({ id: commentId, author: commentAuthor });
-    setReplyText("");
-  };
-
-  const handleSendReply = () => {
-    if (replyText.trim()) {
-      Alert.alert("Reply Sent", `Reply: ${replyText}`);
-      setReplyingTo(null);
-      setReplyText("");
-    }
-  };
-
-  const handleCancelReply = () => {
-    setReplyingTo(null);
-    setReplyText("");
-  };
-
+  
   const handleMemberPress = (member) => {
     Alert.alert("Team Member", `View profile: ${member.name}`);
   };
@@ -225,52 +459,13 @@ const ProjectDetails = () => {
   };
 
   const getPriorityColor = (priority) => {
-    switch (priority.toLowerCase()) {
+    switch (priority?.toLowerCase()) {
       case "high":
         return "#EF4444";
       case "medium":
         return "#F59E0B";
       case "low":
         return "#10B981";
-      default:
-        return "#6B7280";
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "#10B981";
-      case "in-progress":
-        return "#3B82F6";
-      case "pending":
-        return "#F59E0B";
-      default:
-        return "#6B7280";
-    }
-  };
-
-  const getFileIcon = (type) => {
-    switch (type) {
-      case "figma":
-        return "color-palette-outline";
-      case "pdf":
-        return "document-text-outline";
-      case "document":
-        return "document-outline";
-      default:
-        return "document-outline";
-    }
-  };
-
-  const getMemberStatusColor = (status) => {
-    switch (status) {
-      case "online":
-        return "#10B981";
-      case "away":
-        return "#F59E0B";
-      case "offline":
-        return "#6B7280";
       default:
         return "#6B7280";
     }
@@ -283,9 +478,9 @@ const ProjectDetails = () => {
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      {member.avatar ? (
+      {member.profile_picture ? (
         <Image
-          source={{ uri: member.avatar }}
+          source={{ uri: `${FILES_URL}${member.profile_picture}` }}
           style={[
             styles.avatarImage,
             { width: size, height: size, borderRadius: size / 2 },
@@ -294,497 +489,6 @@ const ProjectDetails = () => {
       ) : (
         <Ionicons name="person" size={size * 0.6} color="#9CA3AF" />
       )}
-    </View>
-  );
-
-  const renderOverviewTab = () => (
-    <View style={styles.tabContent}>
-      {/* Project Stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{project.progress}%</Text>
-          <Text style={styles.statLabel}>Progress</Text>
-          <View style={styles.progressBar}>
-            <View style={styles.progressBackground}>
-              <View
-                style={[styles.progressFill, { width: `${project.progress}%` }]}
-              />
-            </View>
-          </View>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>
-            {project.tasks.filter((t) => t.status === "completed").length}/
-            {project.tasks.length}
-          </Text>
-          <Text style={styles.statLabel}>Tasks</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{project.teamMembers.length}</Text>
-          <Text style={styles.statLabel}>Team</Text>
-        </View>
-      </View>
-
-      {/* Description */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Description</Text>
-        <Text style={styles.description}>{project.description}</Text>
-      </View>
-
-      {/* Project Details */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Project Details</Text>
-        <View style={styles.detailsContainer}>
-          <View style={styles.detailItem}>
-            <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-            <Text style={styles.detailLabel}>Due Date</Text>
-            <Text style={styles.detailValue}>{project.dueDate}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="person-outline" size={16} color="#6B7280" />
-            <Text style={styles.detailLabel}>Client</Text>
-            <Text style={styles.detailValue}>{project.client}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="cash-outline" size={16} color="#6B7280" />
-            <Text style={styles.detailLabel}>Budget</Text>
-            <Text style={styles.detailValue}>{project.budget}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="card-outline" size={16} color="#6B7280" />
-            <Text style={styles.detailLabel}>Spent</Text>
-            <Text style={styles.detailValue}>{project.spent}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Recent Comments */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Project Comments</Text>
-
-        {/* Comments List */}
-        <View style={styles.commentsContainer}>
-          {project.comments && project.comments.length > 0 ? (
-            project.comments.map((comment) => (
-              <View key={comment.id} style={styles.projectCommentCard}>
-                {/* Main Comment */}
-                <View style={styles.commentHeader}>
-                  {renderAvatar(
-                    { avatar: comment.avatar, name: comment.author },
-                    32
-                  )}
-                  <View style={styles.commentInfo}>
-                    <Text style={styles.commentAuthor}>{comment.author}</Text>
-                    <Text style={styles.commentTime}>{comment.time}</Text>
-                  </View>
-                </View>
-                <Text style={styles.commentText}>{comment.content}</Text>
-
-                {/* Comment Actions */}
-                <View style={styles.commentActions}>
-                  <TouchableOpacity
-                    style={styles.commentAction}
-                    onPress={() => handleLikeComment(comment.id)}
-                  >
-                    <Ionicons
-                      name={comment.isLiked ? "heart" : "heart-outline"}
-                      size={16}
-                      color={comment.isLiked ? "#EF4444" : "#6B7280"}
-                    />
-                    <Text
-                      style={[
-                        styles.commentActionText,
-                        comment.isLiked && styles.likedText,
-                      ]}
-                    >
-                      {comment.likes > 0 ? comment.likes : "Like"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.commentAction}
-                    onPress={() =>
-                      handleReplyToComment(comment.id, comment.author)
-                    }
-                  >
-                    <Ionicons
-                      name="chatbubble-outline"
-                      size={16}
-                      color="#6B7280"
-                    />
-                    <Text style={styles.commentActionText}>Reply</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Replies */}
-                {comment.replies && comment.replies.length > 0 && (
-                  <View style={styles.repliesContainer}>
-                    {comment.replies.map((reply) => (
-                      <View key={reply.id} style={styles.replyCard}>
-                        <View style={styles.replyHeader}>
-                          {renderAvatar(
-                            { avatar: reply.avatar, name: reply.author },
-                            24
-                          )}
-                          <View style={styles.replyInfo}>
-                            <Text style={styles.replyAuthor}>
-                              {reply.author}
-                            </Text>
-                            <Text style={styles.replyTime}>{reply.time}</Text>
-                          </View>
-                        </View>
-                        <Text style={styles.replyText}>{reply.content}</Text>
-
-                        {/* Reply Actions */}
-                        <View style={styles.replyActions}>
-                          <TouchableOpacity
-                            style={styles.replyAction}
-                            onPress={() => handleLikeComment(reply.id)}
-                          >
-                            <Ionicons
-                              name={reply.isLiked ? "heart" : "heart-outline"}
-                              size={12}
-                              color={reply.isLiked ? "#EF4444" : "#9CA3AF"}
-                            />
-                            <Text
-                              style={[
-                                styles.replyActionText,
-                                reply.isLiked && styles.likedText,
-                              ]}
-                            >
-                              {reply.likes > 0 ? reply.likes : "Like"}
-                            </Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.replyAction}
-                            onPress={() =>
-                              handleReplyToComment(comment.id, reply.author)
-                            }
-                          >
-                            <Ionicons
-                              name="chatbubble-outline"
-                              size={12}
-                              color="#9CA3AF"
-                            />
-                            <Text style={styles.replyActionText}>Reply</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Reply Input (when replying to this comment) */}
-                {replyingTo && replyingTo.id === comment.id && (
-                  <View style={styles.replyInputContainer}>
-                    <View style={styles.replyInputHeader}>
-                      <Text style={styles.replyingToText}>
-                        Replying to {replyingTo.author}
-                      </Text>
-                      <TouchableOpacity onPress={handleCancelReply}>
-                        <Ionicons name="close" size={16} color="#9CA3AF" />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.replyInputBox}>
-                      <TextInput
-                        style={styles.replyInput}
-                        placeholder="Write a reply..."
-                        value={replyText}
-                        onChangeText={setReplyText}
-                        multiline
-                        placeholderTextColor="#9CA3AF"
-                      />
-                      <TouchableOpacity
-                        style={[
-                          styles.sendReplyButton,
-                          !replyText.trim() && styles.sendReplyButtonDisabled,
-                        ]}
-                        onPress={handleSendReply}
-                        disabled={!replyText.trim()}
-                      >
-                        <Ionicons
-                          name="send"
-                          size={16}
-                          color={replyText.trim() ? "#1C30A4" : "#9CA3AF"}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-            ))
-          ) : (
-            <View style={styles.noCommentsContainer}>
-              <Text style={styles.noCommentsText}>
-                No comments yet. Be the first to comment!
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Add New Comment */}
-        <View style={styles.addProjectCommentContainer}>
-          {/* <View style={styles.addProjectCommentHeader}>
-            <Text style={styles.addCommentTitle}>Add Comment</Text>
-          </View> */}
-          <View style={styles.addProjectCommentInputContainer}>
-            <View style={styles.commentInputAvatar}>
-              {renderAvatar({ avatar: null, name: "You" }, 28)}
-            </View>
-            <View style={styles.commentInputBox}>
-              <TextInput
-                style={styles.addProjectCommentInput}
-                placeholder="Share your thoughts about this project..."
-                value={newProjectComment}
-                onChangeText={setNewProjectComment}
-                multiline
-                placeholderTextColor="#9CA3AF"
-              />
-              <TouchableOpacity
-                style={[
-                  styles.sendProjectCommentButton,
-                  !newProjectComment.trim() &&
-                    styles.sendProjectCommentButtonDisabled,
-                ]}
-                onPress={handleAddProjectComment}
-                disabled={!newProjectComment.trim()}
-              >
-                <Ionicons
-                  name="send"
-                  size={18}
-                  color={newProjectComment.trim() ? "#1C30A4" : "#9CA3AF"}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderTasksTab = () => (
-    <View style={styles.tabContent}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Tasks ({project.tasks.length})</Text>
-        <TouchableOpacity onPress={handleAddTask} style={styles.addTaskButton}>
-          <Ionicons name="add" size={16} color="#1C30A4" />
-          <Text style={styles.addTaskText}>Add Task</Text>
-        </TouchableOpacity>
-      </View>
-
-      {project.tasks.map((task) => (
-        <View key={task.id} style={styles.taskCard}>
-          <TouchableOpacity onPress={() => handleTaskPress(task)}>
-            <View style={styles.taskHeader}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
-              <View style={styles.taskHeaderRight}>
-                <View
-                  style={[
-                    styles.priorityBadge,
-                    { backgroundColor: getPriorityColor(task.priority) + "20" },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.priorityDot,
-                      { backgroundColor: getPriorityColor(task.priority) },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.priorityText,
-                      { color: getPriorityColor(task.priority) },
-                    ]}
-                  >
-                    {task.priority}
-                  </Text>
-                </View>
-                <Ionicons
-                  name={
-                    expandedTask === task.id ? "chevron-up" : "chevron-down"
-                  }
-                  size={16}
-                  color="#9CA3AF"
-                  style={styles.expandIcon}
-                />
-              </View>
-            </View>
-            <View style={styles.taskDetails}>
-              <View style={styles.taskLeftDetails}>
-                <View style={styles.taskDetail}>
-                  <Ionicons name="person-outline" size={12} color="#6B7280" />
-                  <Text style={styles.taskDetailText}>{task.assignee}</Text>
-                </View>
-                <View style={styles.taskDetail}>
-                  <Ionicons name="calendar-outline" size={12} color="#6B7280" />
-                  <Text style={styles.taskDetailText}>{task.dueDate}</Text>
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.taskStatus,
-                  { backgroundColor: getStatusColor(task.status) + "20" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.taskStatusText,
-                    { color: getStatusColor(task.status) },
-                  ]}
-                >
-                  {task.status.replace("-", " ")}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Expanded Comments Section */}
-          {expandedTask === task.id && (
-            <View style={styles.commentsSection}>
-              <View style={styles.commentsDivider} />
-
-              {/* Comments Header */}
-              <View style={styles.commentsHeader}>
-                <Text style={styles.commentsTitle}>
-                  Comments ({task.comments.length})
-                </Text>
-              </View>
-
-              {/* Comments List */}
-              {task.comments && task.comments.length > 0 ? (
-                task.comments.map((comment) => (
-                  <View key={comment.id} style={styles.taskCommentCard}>
-                    <View style={styles.taskCommentHeader}>
-                      {renderAvatar(
-                        { avatar: comment.avatar, name: comment.author },
-                        20
-                      )}
-                      <View style={styles.taskCommentInfo}>
-                        <Text style={styles.taskCommentAuthor}>
-                          {comment.author}
-                        </Text>
-                        <Text style={styles.taskCommentTime}>
-                          {comment.time}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.taskCommentText}>
-                      {comment.content}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.noCommentsText}>No comments yet</Text>
-              )}
-
-              {/* Add Comment Input */}
-              <View style={styles.addCommentContainer}>
-                <View style={styles.addCommentInputContainer}>
-                  <TextInput
-                    style={styles.addCommentInput}
-                    placeholder="Add a comment..."
-                    value={newComment}
-                    onChangeText={setNewComment}
-                    multiline
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.sendCommentButton,
-                      !newComment.trim() && styles.sendCommentButtonDisabled,
-                    ]}
-                    onPress={() => handleAddComment(task.id)}
-                    disabled={!newComment.trim()}
-                  >
-                    <Ionicons
-                      name="send"
-                      size={16}
-                      color={newComment.trim() ? "#1C30A4" : "#9CA3AF"}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          )}
-        </View>
-      ))}
-    </View>
-  );
-
-  const renderTeamTab = () => (
-    <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>
-        Team Members ({project.teamMembers.length})
-      </Text>
-      {project.teamMembers.map((member) => (
-        <TouchableOpacity
-          key={member.id}
-          style={styles.memberCard}
-          onPress={() => handleMemberPress(member)}
-        >
-          <View style={styles.memberInfo}>
-            <View style={styles.memberAvatarContainer}>
-              {renderAvatar(member, 40)}
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: getMemberStatusColor(member.status) },
-                ]}
-              />
-            </View>
-            <View style={styles.memberDetails}>
-              <Text style={styles.memberName}>{member.name}</Text>
-              <Text style={styles.memberRole}>{member.role}</Text>
-            </View>
-          </View>
-          <View style={styles.memberStatus}>
-            <Text
-              style={[
-                styles.statusText,
-                { color: getMemberStatusColor(member.status) },
-              ]}
-            >
-              {member.status}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-          </View>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const renderFilesTab = () => (
-    <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>
-        Project Files ({project.files.length})
-      </Text>
-      {project.files.map((file) => (
-        <TouchableOpacity
-          key={file.id}
-          style={styles.fileCard}
-          onPress={() => handleFilePress(file)}
-        >
-          <View style={styles.fileInfo}>
-            <View style={styles.fileIcon}>
-              <Ionicons
-                name={getFileIcon(file.type)}
-                size={24}
-                color="#1C30A4"
-              />
-            </View>
-            <View style={styles.fileDetails}>
-              <Text style={styles.fileName}>{file.name}</Text>
-              <Text style={styles.fileMetadata}>
-                {file.size} • {file.uploadedBy} • {file.date}
-              </Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.downloadButton}>
-            <Ionicons name="download-outline" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        </TouchableOpacity>
-      ))}
     </View>
   );
 
@@ -802,6 +506,30 @@ const ProjectDetails = () => {
         return renderOverviewTab();
     }
   };
+
+  // Loading state
+  if (projectLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <LoadingState />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (projectError || !project) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text>Error loading project</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -831,24 +559,9 @@ const ProjectDetails = () => {
           </View>
         </View>
         <View style={styles.projectInfo}>
-          <Text style={styles.projectName}>{project.name}</Text>
-          <Text style={styles.projectCategory}>{project.category}</Text>
+          <Text style={styles.projectName}>{project.title}</Text>
+          <Text style={styles.projectCategory}>{project.id}</Text>
           <View style={styles.projectMeta}>
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: getStatusColor(project.status) + "20" },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  { color: getStatusColor(project.status) },
-                ]}
-              >
-                {project.status}
-              </Text>
-            </View>
             <View
               style={[
                 styles.priorityBadge,
@@ -1617,6 +1330,21 @@ const styles = StyleSheet.create({
   },
   avatarImage: {
     resizeMode: "cover",
+  },
+  assignedUsersContainer: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  moreButtonText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  additionalUserText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    marginLeft: 2,
   },
 });
 

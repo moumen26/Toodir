@@ -247,38 +247,6 @@ class ProjectService {
     }
   }
 
-  // Add project member
-  async addProjectMember(projectId, userId) {
-    try {
-      const response = await apiClient.post(`/project/${projectId}/members`, {
-        user_id: userId
-      });
-      
-      // Clear related caches
-      this.clearCacheEntry(`project_${projectId}`);
-      
-      return response;
-    } catch (error) {
-      console.error('Error adding project member:', error);
-      throw this.handleError(error);
-    }
-  }
-
-  // Remove project member
-  async removeProjectMember(projectId, memberId) {
-    try {
-      const response = await apiClient.delete(`/project/${projectId}/members/${memberId}`);
-      
-      // Clear related caches
-      this.clearCacheEntry(`project_${projectId}`);
-      
-      return response;
-    } catch (error) {
-      console.error('Error removing project member:', error);
-      throw this.handleError(error);
-    }
-  }
-
   // Get project statistics
   async getProjectStats(projectId, forceRefresh = false) {
     try {
