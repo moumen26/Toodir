@@ -529,8 +529,7 @@ const ProjectDetails = () => {
         </View>
       </SafeAreaView>
     );
-  }
-
+  }  
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -560,7 +559,26 @@ const ProjectDetails = () => {
         </View>
         <View style={styles.projectInfo}>
           <Text style={styles.projectName}>{project.title}</Text>
-          <Text style={styles.projectCategory}>{project.id}</Text>
+          {project?.tags && project.tags.length > 0 && (
+            <View style={styles.tagsContainer}>
+              {project.tags.slice(0, 2).map((tag) => (
+                <View
+                  key={tag.id}
+                  style={[
+                    styles.tagChip,
+                    { backgroundColor: tag.color + "20" }
+                  ]}
+                >
+                  <Text style={[styles.tagText, { color: tag.color }]}>
+                    {tag.name}
+                  </Text>
+                </View>
+              ))}
+              {project.tags.length > 2 && (
+                <Text style={styles.moreTagsText}>+{project.tags.length - 2}</Text>
+              )}
+            </View>
+          )}
           <View style={styles.projectMeta}>
             <View
               style={[
@@ -1345,6 +1363,28 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
     marginLeft: 2,
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    flexWrap: "wrap",
+  },
+  tagChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  tagText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  moreTagsText: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "500",
   },
 });
 

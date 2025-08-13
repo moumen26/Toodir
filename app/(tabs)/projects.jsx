@@ -22,6 +22,8 @@ import {
 } from "../hooks/useProjects";
 import LoadingState from '../components/LoadingState'
 import EmptyState from '../components/EmptyState'
+import Constants from 'expo-constants';
+const FILES_URL = Constants.expoConfig?.extra?.filesUrl;
 
 // Optimized VirtualizedList for better performance than FlatList
 const OptimizedList = memo(({ 
@@ -105,9 +107,9 @@ const ProjectCard = memo(({
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      {member.avatar ? (
+      {member?.profile_picture ? (
         <Image
-          source={{ uri: member.avatar }}
+          source={{ uri: `${FILES_URL}${member.profile_picture}` }}
           style={[
             styles.avatarImage,
             { width: size, height: size, borderRadius: size / 2 },
@@ -270,7 +272,7 @@ const ProjectCard = memo(({
         </View>
       </View>
 
-      <View style={styles.projectFooter}>
+      {/* <View style={styles.projectFooter}>
         <View style={styles.projectProgress}>
           <View style={styles.progressInfo}>
             <Text style={styles.tasksText}>
@@ -298,7 +300,7 @@ const ProjectCard = memo(({
             {item.status || 'Active'}
           </Text>
         </View>
-      </View>
+      </View> */}
     </TouchableOpacity>
   );
 }, (prevProps, nextProps) => {
