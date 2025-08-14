@@ -57,7 +57,7 @@ const ImagePickerComponent = memo(({
         onImagesChange([...images, ...newImages]);
       }
     } catch (error) {
-      console.error('Error picking images:', error);
+      console.log('Error picking images:', error);
       Alert.alert('Error', 'Failed to pick images. Please try again.');
     }
   }, [images, maxImages, onImagesChange, requestPermissions]);
@@ -95,7 +95,7 @@ const ImagePickerComponent = memo(({
         onImagesChange([...images, newImage]);
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
+      console.log('Error taking photo:', error);
       Alert.alert('Error', 'Failed to take photo. Please try again.');
     }
   }, [images, onImagesChange]);

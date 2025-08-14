@@ -69,7 +69,6 @@ const TaskDetail = () => {
               ]);
             } catch (error) {
               console.log(error);
-              
             }
           },
         },

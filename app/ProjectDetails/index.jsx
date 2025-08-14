@@ -1,5 +1,5 @@
-// ProjectDetails/index.jsx
-import { useState, useMemo } from "react";
+// ProjectDetails/index.jsx - Updated with Add Member & Swipe Delete
+import { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,19 +10,35 @@ import {
   Alert,
   SafeAreaView,
   ActivityIndicator,
+  FlatList,
+  Animated,
+  PanGestureHandler,
+  State
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useLocalSearchParams } from "expo-router";
+import { useNavigation, useLocalSearchParams, router } from "expo-router";
 import { useProject, useProjectStats } from "../hooks/useProjectQueries";
+import { useProjectTasks } from "../hooks/useTaskQueries";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import TaskCard from '../components/TaskCard'
 import Constants from 'expo-constants';
+import ProjectMembersPopup from '../components/ProjectMembersPopup';
+import SwipeableMemberCard from '../components/SwipeableMemberCard';
+import { useAuthStatus } from "../hooks/useAuth";
+import projectMemberService from '../services/projectMemberService';
 
 // Get API URL from Expo Constants
 const FILES_URL = Constants.expoConfig?.extra?.filesUrl;
 
 const ProjectDetails = () => {
+  const { user } = useAuthStatus();
   const [selectedTab, setSelectedTab] = useState("Overview");
+  const [selectedTaskFilter, setSelectedTaskFilter] = useState("all");
+  const [showMembersPopup, setShowMembersPopup] = useState(false);
+  const [removingMember, setRemovingMember] = useState(null);
   const navigation = useNavigation();
   const { projectId } = useLocalSearchParams();
+  const queryClient = useQueryClient();
   
   // Fetch project data
   const {
@@ -30,18 +46,40 @@ const ProjectDetails = () => {
     isLoading: isProjectLoading,
     error: projectError,
     refetch: refetchProject,
-  } = useProject(projectId);  
-
+  } = useProject(projectId); 
+  
   // Fetch project statistics
   const {
     data: statsData,
     isLoading: isStatsLoading,
   } = useProjectStats(projectId);
 
+  // Fetch project tasks
+  const {
+    data: projectTasksData,
+    isLoading: isTasksLoading,
+    refetch: refetchTasks,
+  } = useProjectTasks(projectId);
+
+  // Remove member mutation
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberID) => {      
+      return projectMemberService.removeProjectMember(memberID, projectId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (error) => {
+      console.log('Remove member error:', error);
+    },
+  });
+  
   const project = projectData?.data;
   const average_progress = projectData?.average_progress;
-  
   const stats = statsData?.data;
+  const projectTasks = projectTasksData?.data || [];
+  const isOwner = user?.id == project?.owner_id;
 
   const tabs = ["Overview", "Tasks", "Team"];
 
@@ -53,6 +91,97 @@ const ProjectDetails = () => {
     Alert.alert("Edit Project", "Navigate to edit project screen");
   };
 
+  const handleCreateTask = useCallback(() => {
+    // Navigate to create task with project pre-selected
+    router.push(`/CreateTask?projectId=${projectId}`);
+  }, [projectId]);
+
+  const handleTaskPress = useCallback((task) => {
+    router.push(`/TaskDetails?taskId=${task.id}`);
+  }, []);
+
+  const handleTaskFilterChange = useCallback((filter) => {
+    setSelectedTaskFilter(filter);
+  }, []);
+
+  const handleRemoveMember = async (member) => {        
+    // Don't allow removing the owner
+    if (member.id === project?.owner_id) {
+      Alert.alert('Cannot Remove Owner', 'The project owner cannot be removed from the project.');
+      return;
+    }
+
+    // Don't allow removing yourself
+    if (member.id === user?.id) {
+      Alert.alert('Cannot Remove Yourself', 'You cannot remove yourself from the project. Transfer ownership first if needed.');
+      return;
+    }
+
+    Alert.alert(
+      'Remove Member',
+      `Remove ${member.full_name} from this project?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setRemovingMember(member.id);
+
+              await removeMemberMutation.mutateAsync(member.id);
+              
+              Alert.alert(
+                'Success',
+                `${member.full_name} has been removed from the project.`,
+                [{ text: 'OK' }]
+              );
+            } catch (error) {
+              Alert.alert(
+                'Error',
+                error.message || 'Failed to remove member',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setRemovingMember(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleAddMembers = () => {
+    setShowMembersPopup(true);
+  };
+
+  // Filter tasks based on selected filter
+  const filteredTasks = useMemo(() => {
+    if (!projectTasks.length) return [];
+    
+    switch (selectedTaskFilter) {
+      case "active":
+        return projectTasks.filter(task => !task.closed && !task.is_overdue);
+      case "completed":
+        return projectTasks.filter(task => task.closed);
+      case "overdue":
+        return projectTasks.filter(task => task.is_overdue && !task.closed);
+      case "upcoming":
+        return projectTasks.filter(task => {
+          if (!task.start_date) return false;
+          const startDate = new Date(task.start_date);
+          const now = new Date();
+          return startDate > now;
+        });
+      case "high":
+      case "medium":
+      case "low":
+        return projectTasks.filter(task => task.priority?.toLowerCase() === selectedTaskFilter);
+      default: // "all"
+        return projectTasks;
+    }
+  }, [projectTasks, selectedTaskFilter]);
+
   const getPriorityColor = (priority) => {
     switch (priority?.toLowerCase()) {
       case "high":
@@ -61,25 +190,6 @@ const ProjectDetails = () => {
         return "#F59E0B";
       case "low":
         return "#10B981";
-      default:
-        return "#6B7280";
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-      case "done":
-        return "#10B981";
-      case "active":
-      case "in progress":
-      case "in-progress":
-        return "#3B82F6";
-      case "review":
-        return "#8B5CF6";
-      case "planning":
-      case "pending":
-        return "#F59E0B";
       default:
         return "#6B7280";
     }
@@ -116,31 +226,142 @@ const ProjectDetails = () => {
     });
   };
 
+  // Calculate task statistics for the project using server stats
+  const taskStats = useMemo(() => {
+    if (stats?.task_summary) {
+      return {
+        total: stats.task_summary.total_tasks,
+        completed: stats.task_summary.closed_tasks,
+        active: stats.task_summary.active_tasks,
+        overdue: stats.task_summary.overdue_tasks,
+        high: stats.task_breakdown?.by_priority?.high || 0,
+        medium: stats.task_breakdown?.by_priority?.medium || 0,
+        low: stats.task_breakdown?.by_priority?.low || 0,
+        completion_rate: stats.task_summary.progress_percentage,
+        overdue_rate: stats.performance_metrics?.overdue_rate || 0,
+        efficiency_score: stats.performance_metrics?.efficiency_score || 0,
+      };
+    }
+    
+    // Fallback to local calculation if server stats not available
+    if (!projectTasks.length) return {};
+    
+    const total = projectTasks.length;
+    const completed = projectTasks.filter(task => task.closed).length;
+    const active = projectTasks.filter(task => !task.closed && !task.is_overdue).length;
+    const overdue = projectTasks.filter(task => task.is_overdue && !task.closed).length;
+    const high = projectTasks.filter(task => task.priority?.toLowerCase() === 'high').length;
+    const medium = projectTasks.filter(task => task.priority?.toLowerCase() === 'medium').length;
+    const low = projectTasks.filter(task => task.priority?.toLowerCase() === 'low').length;
+    
+    return {
+      total,
+      completed,
+      active,
+      overdue,
+      high,
+      medium,
+      low,
+      completion_rate: total > 0 ? Math.round((completed / total) * 100) : 0,
+      overdue_rate: total > 0 ? Math.round((overdue / total) * 100) : 0,
+      efficiency_score: total > 0 ? Math.round(((completed / total) * (100 - (overdue / total) * 100)) / 100 * 100) : 100,
+    };
+  }, [stats, projectTasks]);
+
   const renderOverviewTab = () => (
     <View style={styles.tabContent}>
       {/* Project Stats */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{average_progress || 0}%</Text>
+          <Text style={styles.statNumber}>
+            {stats?.task_summary?.progress_percentage || average_progress || 0}%
+          </Text>
           <Text style={styles.statLabel}>Progress</Text>
           <View style={styles.progressBar}>
             <View style={styles.progressBackground}>
               <View
                 style={[
                   styles.progressFill,
-                  { width: `${average_progress || 0}%` }
+                  { width: `${stats?.task_summary?.progress_percentage || average_progress || 0}%` }
                 ]}
               />
             </View>
           </View>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{project?.tasks?.length || 0}</Text>
+          <Text style={styles.statNumber}>{taskStats.total || 0}</Text>
           <Text style={styles.statLabel}>Tasks</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{project?.members?.length || 0}</Text>
+          <Text style={styles.statNumber}>
+            {stats?.project_resources?.total_members || project?.members?.length || 0}
+          </Text>
           <Text style={styles.statLabel}>Team</Text>
+        </View>
+      </View>
+
+      {/* Enhanced Stats Row */}
+      <View style={styles.enhancedStatsContainer}>
+        <View style={styles.enhancedStatCard}>
+          <View style={styles.enhancedStatIcon}>
+            <Ionicons name="trending-up" size={20} color="#10B981" />
+          </View>
+          <View style={styles.enhancedStatInfo}>
+            <Text style={styles.enhancedStatNumber}>{taskStats.efficiency_score || 0}%</Text>
+            <Text style={styles.enhancedStatLabel}>Efficiency</Text>
+          </View>
+        </View>
+        
+        <View style={styles.enhancedStatCard}>
+          <View style={styles.enhancedStatIcon}>
+            <Ionicons name="warning" size={20} color="#EF4444" />
+          </View>
+          <View style={styles.enhancedStatInfo}>
+            <Text style={styles.enhancedStatNumber}>{taskStats.overdue_rate || 0}%</Text>
+            <Text style={styles.enhancedStatLabel}>Overdue</Text>
+          </View>
+        </View>
+
+        {stats?.timeline && (
+          <View style={styles.enhancedStatCard}>
+            <View style={styles.enhancedStatIcon}>
+              <Ionicons name="calendar" size={20} color="#3B82F6" />
+            </View>
+            <View style={styles.enhancedStatInfo}>
+              <Text style={styles.enhancedStatNumber}>{stats.timeline.days_remaining}</Text>
+              <Text style={styles.enhancedStatLabel}>Days Left</Text>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Quick Task Stats */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Task Overview</Text>
+        <View style={styles.quickStatsGrid}>
+          <View style={[styles.quickStatCard, { borderLeftColor: "#3B82F6" }]}>
+            <View style={styles.quickStatInfo}>
+              <Text style={styles.quickStatNumber}>{taskStats.active || 0}</Text>
+              <Text style={styles.quickStatLabel}>Active</Text>
+            </View>
+            <Ionicons name="time" size={24} color="#3B82F6" />
+          </View>
+          
+          <View style={[styles.quickStatCard, { borderLeftColor: "#10B981" }]}>
+            <View style={styles.quickStatInfo}>
+              <Text style={styles.quickStatNumber}>{taskStats.completed || 0}</Text>
+              <Text style={styles.quickStatLabel}>Completed</Text>
+            </View>
+            <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+          </View>
+          
+          <View style={[styles.quickStatCard, { borderLeftColor: "#EF4444" }]}>
+            <View style={styles.quickStatInfo}>
+              <Text style={styles.quickStatNumber}>{taskStats.overdue || 0}</Text>
+              <Text style={styles.quickStatLabel}>Overdue</Text>
+            </View>
+            <Ionicons name="warning" size={24} color="#EF4444" />
+          </View>
         </View>
       </View>
 
@@ -202,95 +423,174 @@ const ProjectDetails = () => {
     </View>
   );
 
-  const renderTasksTab = () => (
-    <View style={styles.tabContent}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Tasks ({project?.tasks?.length || 0})</Text>
-      </View>
-
-      {project?.tasks && project.tasks.length > 0 ? (
-        project?.tasks?.map((task) => (
-          <View key={task.id} style={styles.taskCard}>
-            <View style={styles.taskHeader}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
-              <View
+  const renderTasksTab = () => {
+    const renderTaskFilters = () => (
+      <View style={styles.taskFiltersContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.taskFiltersContent}
+        >
+          {[
+            { id: "all", name: "All", count: taskStats.total },
+            { id: "active", name: "Active", count: taskStats.active },
+            { id: "completed", name: "Completed", count: taskStats.completed },
+            { id: "overdue", name: "Overdue", count: taskStats.overdue },
+            { id: "high", name: "High", count: taskStats.high },
+            { id: "medium", name: "Medium", count: taskStats.medium },
+            { id: "low", name: "Low", count: taskStats.low },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.id}
+              style={[
+                styles.taskFilterChip,
+                selectedTaskFilter === filter.id && styles.activeTaskFilterChip,
+              ]}
+              onPress={() => handleTaskFilterChange(filter.id)}
+            >
+              <Text
                 style={[
-                  styles.priorityBadge,
-                  { backgroundColor: getPriorityColor(task.priority) + "20" },
+                  styles.taskFilterText,
+                  selectedTaskFilter === filter.id && styles.activeTaskFilterText,
                 ]}
               >
-                <View
-                  style={[
-                    styles.priorityDot,
-                    { backgroundColor: getPriorityColor(task.priority) },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.priorityText,
-                    { color: getPriorityColor(task.priority) },
-                  ]}
-                >
-                  {task.priority || 'Low'}
+                {filter.name}
+              </Text>
+              <View style={[
+                styles.taskFilterBadge,
+                selectedTaskFilter === filter.id && styles.activeTaskFilterBadge,
+              ]}>
+                <Text style={[
+                  styles.taskFilterBadgeText,
+                  selectedTaskFilter === filter.id && styles.activeTaskFilterBadgeText,
+                ]}>
+                  {filter.count || 0}
                 </Text>
               </View>
-            </View>
-            
-            <Text style={styles.taskDescription}>{task.description}</Text>
-            
-            <View style={styles.taskDetails}>
-              <View style={styles.taskLeftDetails}>
-                <View style={styles.taskDetail}>
-                  <Ionicons name="calendar-outline" size={12} color="#6B7280" />
-                  <Text style={styles.taskDetailText}>{formatDate(task.end_date)}</Text>
-                </View>
-                {task?.assignedUsers && task?.assignedUsers?.length > 0 && (
-                  <View style={styles.taskDetail}>
-                    <Ionicons name="person-outline" size={12} color="#6B7280" />
-                    <Text style={styles.taskDetailText}>
-                      {task?.assignedUsers[0]?.full_name}
-                      {task?.assignedUsers?.length > 1 && ` +${task?.assignedUsers?.length - 1}`}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+
+    const renderTaskItem = ({ item: task, index }) => (
+      <TaskCard
+        task={task}
+        onPress={handleTaskPress}
+        showProject={false}
+        showAssignments={true}
+        style={index === 0 ? styles.firstTask : undefined}
+        showCloseButton={true}
+      />
+    );
+
+    const renderTaskHeader = () => (
+      <View>
+        {/* Task Header with Add Button */}
+        <View style={styles.tasksHeader}>
+          <View style={styles.tasksHeaderLeft}>
+            <Text style={styles.sectionTitle}>
+              Project Tasks ({taskStats.total || 0})
+            </Text>
+            <Text style={styles.tasksSubtitle}>
+              {taskStats.completed || 0} completed • {taskStats.active || 0} active
+            </Text>
           </View>
-        ))
-      ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="clipboard-outline" size={48} color="#D1D5DB" />
-          <Text style={styles.emptyStateText}>No tasks available</Text>
+          <TouchableOpacity 
+            style={styles.addTaskButton}
+            onPress={handleCreateTask}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addTaskButtonText}>Add Task</Text>
+          </TouchableOpacity>
         </View>
-      )}
-    </View>
-  );
+
+        {/* Task Filters */}
+        {renderTaskFilters()}
+      </View>
+    );
+
+    const renderEmptyTasks = () => (
+      <View style={styles.emptyTasksContainer}>
+        <Ionicons name="checkmark-done-outline" size={64} color="#D1D5DB" />
+        <Text style={styles.emptyTasksTitle}>
+          {selectedTaskFilter === "all" ? "No tasks yet" : `No ${selectedTaskFilter} tasks`}
+        </Text>
+        <Text style={styles.emptyTasksText}>
+          {selectedTaskFilter === "all" 
+            ? "Create your first task to get started"
+            : "Try selecting a different filter"
+          }
+        </Text>
+        {selectedTaskFilter === "all" && (
+          <TouchableOpacity 
+            style={styles.createFirstTaskButton}
+            onPress={handleCreateTask}
+          >
+            <Text style={styles.createFirstTaskText}>Create First Task</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+
+    return (
+      <FlatList
+        style={styles.tasksTabContainer}
+        contentContainerStyle={styles.tasksTabContent}
+        data={filteredTasks}
+        renderItem={renderTaskItem}
+        keyExtractor={(item) => item.id.toString()}
+        ListHeaderComponent={renderTaskHeader}
+        ListEmptyComponent={renderEmptyTasks}
+        showsVerticalScrollIndicator={false}
+        refreshing={isTasksLoading}
+        onRefresh={refetchTasks}
+      />
+    );
+  };
 
   const renderTeamTab = () => (
     <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>
-        Team Members ({project?.members?.length || 0})
-      </Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          Team Members ({project?.members?.length || 0})
+        </Text>
+        {isOwner && (
+          <TouchableOpacity 
+            style={styles.addMemberButton}
+            onPress={handleAddMembers}
+          >
+            <Ionicons name="person-add" size={16} color="#1C30A4" />
+            <Text style={styles.addMemberText}>Add Member</Text>
+          </TouchableOpacity>
+        )}
+      </View>
       
       {project?.members && project?.members?.length > 0 ? (
         project?.members?.map((member) => (
-          <View key={member.id} style={styles.memberCard}>
-            <View style={styles.memberInfo}>
-              <View style={styles.memberAvatarContainer}>
-                {renderAvatar(member, 40)}
-              </View>
-              <View style={styles.memberDetails}>
-                <Text style={styles.memberName}>{member.full_name}</Text>
-                <Text style={styles.memberEmail}>{member.email}</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
-          </View>
+          <SwipeableMemberCard
+            key={member.id}
+            member={member}
+            isOwner={isOwner}
+            isProjectOwner={member.id === project?.owner_id}
+            isCurrentUser={member.id === user?.id}
+            isRemoving={removingMember === member.id}
+            onRemove={() => handleRemoveMember(member)}
+            renderAvatar={() => renderAvatar(member, 40)}
+          />
         ))
       ) : (
         <View style={styles.emptyState}>
           <Ionicons name="people-outline" size={48} color="#D1D5DB" />
           <Text style={styles.emptyStateText}>No team members</Text>
+          {isOwner && (
+            <TouchableOpacity 
+              style={styles.emptyAddMemberButton}
+              onPress={handleAddMembers}
+            >
+              <Text style={styles.emptyAddMemberText}>Add team members</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -449,9 +749,24 @@ const ProjectDetails = () => {
       </View>
 
       {/* Tab Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {renderTabContent()}
-      </ScrollView>
+      {selectedTab === "Tasks" ? (
+        renderTasksTab()
+      ) : (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {renderTabContent()}
+        </ScrollView>
+      )}
+
+      {/* Project Members Popup - Only show for owners */}
+      {isOwner && (
+        <ProjectMembersPopup
+          visible={showMembersPopup}
+          onClose={() => setShowMembersPopup(false)}
+          project={project}
+          projectMembers={project?.members || []}
+          isOwner={isOwner}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -657,6 +972,7 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: "row",
     marginBottom: 24,
+    flexWrap: "wrap",
   },
   statCard: {
     flex: 1,
@@ -664,12 +980,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginRight: 8,
+    marginBottom: 8,
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    minWidth: "22%",
   },
   statNumber: {
     fontSize: 20,
@@ -696,6 +1014,48 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C30A4",
     borderRadius: 2,
   },
+  // Enhanced Stats Styles
+  enhancedStatsContainer: {
+    flexDirection: "row",
+    marginBottom: 24,
+    gap: 12,
+  },
+  enhancedStatCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  enhancedStatIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  enhancedStatInfo: {
+    flex: 1,
+  },
+  enhancedStatNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#374151",
+    marginBottom: 2,
+  },
+  enhancedStatLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
   section: {
     marginBottom: 24,
   },
@@ -710,6 +1070,37 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     marginBottom: 12,
+  },
+  quickStatsGrid: {
+    gap: 12,
+  },
+  quickStatCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickStatInfo: {
+    flex: 1,
+  },
+  quickStatNumber: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#374151",
+    marginBottom: 4,
+  },
+  quickStatLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   description: {
     fontSize: 14,
@@ -762,85 +1153,149 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
   },
-  taskCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  taskHeader: {
+  // Tasks Tab Styles
+  tasksHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 20,
   },
-  taskTitle: {
+  tasksHeaderLeft: {
+    flex: 1,
+  },
+  tasksSubtitle: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    flex: 1,
-    marginRight: 12,
-  },
-  taskDescription: {
-    fontSize: 12,
     color: "#6B7280",
-    marginBottom: 12,
-    lineHeight: 16,
+    marginTop: 4,
   },
-  taskDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  taskLeftDetails: {
+  addTaskButton: {
+    backgroundColor: "#1C30A4",
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
-  },
-  taskDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  taskDetailText: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginLeft: 4,
-  },
-  memberCard: {
-    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    shadowColor: "#1C30A4",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
-  memberInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  memberAvatarContainer: {
-    marginRight: 12,
-  },
-  memberDetails: {
-    flex: 1,
-  },
-  memberName: {
+  addTaskButtonText: {
+    color: "#fff",
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
-    marginBottom: 2,
+    marginLeft: 6,
   },
-  memberEmail: {
+  // Tasks Tab Styles (FlatList version)
+  tasksTabContainer: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
+  tasksTabContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
+  },
+  taskFiltersContainer: {
+    marginBottom: 16,
+  },
+  taskFiltersContent: {
+    paddingRight: 20,
+  },
+  taskFilterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  activeTaskFilterChip: {
+    backgroundColor: "#1C30A4",
+    borderColor: "#1C30A4",
+  },
+  taskFilterText: {
     fontSize: 12,
+    fontWeight: "500",
     color: "#6B7280",
+    marginRight: 6,
+  },
+  activeTaskFilterText: {
+    color: "#fff",
+  },
+  taskFilterBadge: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  activeTaskFilterBadge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  taskFilterBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  activeTaskFilterBadgeText: {
+    color: "#fff",
+  },
+  firstTask: {
+    marginTop: 0,
+  },
+  emptyTasksContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyTasksTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  emptyTasksText: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  createFirstTaskButton: {
+    backgroundColor: "#1C30A4",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  createFirstTaskText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  // Team Tab Styles
+  addMemberButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#EEF2FF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#1C30A4",
+  },
+  addMemberText: {
+    fontSize: 12,
+    color: "#1C30A4",
+    fontWeight: "600",
+    marginLeft: 4,
   },
   emptyState: {
     alignItems: "center",
@@ -851,6 +1306,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#9CA3AF",
     marginTop: 12,
+    marginBottom: 16,
+  },
+  emptyAddMemberButton: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  emptyAddMemberText: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "500",
   },
   avatar: {
     backgroundColor: "#F3F4F6",

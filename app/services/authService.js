@@ -1,3 +1,4 @@
+// services/authService.js - Updated to integrate with AuthContext logout
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '../constants/storage';
@@ -16,6 +17,14 @@ const apiClient = axios.create({
   },
 });
 
+// Variable to store the logout function from AuthContext
+let forceLogoutFunction = null;
+
+// Function to set the logout function (called from AuthContext)
+export const setForceLogoutFunction = (logoutFn) => {
+  forceLogoutFunction = logoutFn;
+};
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
   async (config) => {
@@ -25,7 +34,7 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error('Error getting token for request:', error);
+      console.log('Error getting token for request:', error);
     }
     return config;
   },
@@ -43,30 +52,80 @@ apiClient.interceptors.response.use(
     // Handle 401 errors (unauthorized)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       try {
         // Clear stored auth data
         await Promise.all([
           SecureStore.deleteItemAsync(STORAGE_KEYS.TOKEN),
           AsyncStorage.removeItem(STORAGE_KEYS.USER),
         ]);
-        
-        // Redirect to login - this would need to be handled by the auth context
-        // For now, we'll just reject the promise
+
+        // Call the forceLogout function if available (this will clear React Query cache)
+        if (forceLogoutFunction) {
+          await forceLogoutFunction('Authentication expired');
+        }
+
         return Promise.reject(new Error('Authentication expired'));
       } catch (clearError) {
-        console.error('Error clearing auth data:', clearError);
+        console.log('Error clearing auth data:', clearError);
+        
+        // Still try to call forceLogout even if clearing fails
+        if (forceLogoutFunction) {
+          await forceLogoutFunction('Authentication error');
+        }
       }
+    }
+
+    // Handle 400 and 404 errors with server messages
+    if (error.response?.status === 400 || error.response?.status === 404) {
+      const serverMessage = error.response?.data?.message || 
+                           error.response?.data?.error ||
+                           error.response?.data?.msg ||
+                           (error.response?.status === 400 ? 'Bad request' : 'Not found');
+      
+      const customError = new Error(serverMessage);
+      customError.status = error.response.status;
+      customError.data = error.response.data;
+      return Promise.reject(customError);
     }
 
     // Handle 403 errors (forbidden)
     if (error.response?.status === 403) {
-      return Promise.reject(new Error('Access denied'));
+      const serverMessage = error.response?.data?.message || 
+                           error.response?.data?.error ||
+                           'Access denied';
+      return Promise.reject(new Error(serverMessage));
+    }
+
+    // Handle 422 errors (validation errors)
+    if (error.response?.status === 422) {
+      const serverMessage = error.response?.data?.message || 
+                           error.response?.data?.error ||
+                           'Validation failed';
+      
+      // If there are validation details, include them
+      if (error.response?.data?.errors) {
+        const validationErrors = error.response.data.errors;
+        const errorMessages = Object.values(validationErrors).flat();
+        const combinedMessage = errorMessages.length > 0 
+          ? errorMessages.join(', ') 
+          : serverMessage;
+        
+        const customError = new Error(combinedMessage);
+        customError.status = 422;
+        customError.validationErrors = validationErrors;
+        return Promise.reject(customError);
+      }
+      
+      return Promise.reject(new Error(serverMessage));
     }
 
     // Handle 500 errors (server errors)
     if (error.response?.status === 500) {
-      return Promise.reject(new Error('Server error. Please try again later.'));
+      const serverMessage = error.response?.data?.message || 
+                           error.response?.data?.error ||
+                           'Server error. Please try again later.';
+      return Promise.reject(new Error(serverMessage));
     }
 
     // Handle network errors
@@ -74,6 +133,20 @@ apiClient.interceptors.response.use(
       return Promise.reject(new Error('Network error. Please check your connection.'));
     }
 
+    // Handle other HTTP errors with server messages
+    if (error.response?.data) {
+      const serverMessage = error.response.data.message || 
+                           error.response.data.error ||
+                           error.response.data.msg ||
+                           `HTTP ${error.response.status} Error`;
+      
+      const customError = new Error(serverMessage);
+      customError.status = error.response.status;
+      customError.data = error.response.data;
+      return Promise.reject(customError);
+    }
+
+    // Fallback for any other errors
     return Promise.reject(error);
   }
 );
@@ -105,7 +178,7 @@ const authService = {
       await apiClient.post('/auth/logout');
     } catch (error) {
       // Continue with local logout even if API call fails
-      console.error('Logout API error:', error);
+      console.log('Logout API error:', error);
     }
   },
 
@@ -132,9 +205,9 @@ const authService = {
   // Reset password
   resetPassword: async (token, password) => {
     try {
-      const response = await apiClient.post('/auth/reset-password', { 
-        token, 
-        password 
+      const response = await apiClient.post('/auth/reset-password', {
+        token,
+        password
       });
       return response;
     } catch (error) {

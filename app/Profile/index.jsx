@@ -92,15 +92,15 @@ const Profile = () => {
   const socialOptions = [
     {
       id: 1,
-      title: "Manage Groups",
+      title: "Manage Projects invitations",
       icon: "people-outline",
-      // action: () => navigation.navigate("ManageGroups/index"),
+      action: () => navigation.navigate("ManageProjectInvitations/index"),
     },
     {
       id: 2,
       title: "Manage Friends",
       icon: "person-add-outline",
-      // action: () => navigation.navigate("ManageFriends/index"),
+      action: () => navigation.navigate("ManageFriends/index"),
     },
   ];
 
@@ -309,7 +309,7 @@ const Profile = () => {
         {renderMenuSection("Productivity & Insights", productivityOptions)}
 
         {/* Groups & Friends */}
-        {renderMenuSection("Groups & Friends", socialOptions)}
+        {renderMenuSection("Invitations & Friends", socialOptions)}
 
         {/* Preferences Toggle Section */}
         {renderToggleSection()}

@@ -34,7 +34,7 @@ export const useCreateTag = () => {
       queryClient.invalidateQueries({ queryKey: tagsKeys.lists() });
     },
     onError: (error) => {
-      console.error('Create tag error:', error);
+      console.log('Create tag error:', error);
     },
   });
 };
@@ -55,7 +55,7 @@ export const useUpdateTag = () => {
       queryClient.invalidateQueries({ queryKey: tagsKeys.lists() });
     },
     onError: (error) => {
-      console.error('Update tag error:', error);
+      console.log('Update tag error:', error);
     },
   });
 };
@@ -73,7 +73,7 @@ export const useDeleteTag = () => {
       queryClient.invalidateQueries({ queryKey: tagsKeys.lists() });
     },
     onError: (error) => {
-      console.error('Delete tag error:', error);
+      console.log('Delete tag error:', error);
     },
   });
 };

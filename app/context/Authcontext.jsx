@@ -1,9 +1,10 @@
 import React, { createContext, useReducer, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import { jwtDecode } from 'jwt-decode';
-import authService from '../services/authService';
+import authService, { setForceLogoutFunction } from '../services/authService';
 import { STORAGE_KEYS } from '../constants/storage';
 import { router } from "expo-router";
 
@@ -62,6 +63,7 @@ const AuthReducer = (state, action) => {
 export const AuthContextProvider = ({ children }) => {
   const [state, dispatch] = useReducer(AuthReducer, initialState);
   const navigation = useNavigation();
+  const queryClient = useQueryClient(); // Access QueryClient instance
   
   // Token validation helper
   const isTokenValid = (token) => {
@@ -74,7 +76,7 @@ export const AuthContextProvider = ({ children }) => {
       // Check if token is expired (with 5 minute buffer)
       return decodedToken.exp > (currentTime + 300);
     } catch (error) {
-      console.error('Token validation error:', error);
+      console.log('Token validation error:', error);
       return false;
     }
   };
@@ -87,7 +89,7 @@ export const AuthContextProvider = ({ children }) => {
       // Store user data in AsyncStorage (non-sensitive)
       await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
     } catch (error) {
-      console.error('Error storing auth data:', error);
+      console.log('Error storing auth data:', error);
       throw error;
     }
   };
@@ -100,7 +102,23 @@ export const AuthContextProvider = ({ children }) => {
         AsyncStorage.removeItem(STORAGE_KEYS.REMEMBER_ME),
       ]);
     } catch (error) {
-      console.error('Error clearing auth data:', error);
+      console.log('Error clearing auth data:', error);
+    }
+  };
+
+  // Clear all React Query cache data
+  const clearQueryCache = () => {
+    try {
+      // Clear all queries and mutations from the cache
+      queryClient.clear();
+      
+      // Alternatively, you can be more specific and remove certain query keys:
+      // queryClient.removeQueries(); // Removes all queries
+      // queryClient.resetQueries(); // Resets all queries to initial state
+      
+      console.log('React Query cache cleared successfully');
+    } catch (error) {
+      console.log('Error clearing React Query cache:', error);
     }
   };
 
@@ -167,18 +185,39 @@ export const AuthContextProvider = ({ children }) => {
     try {
       dispatch({ type: "SET_LOADING", payload: true });
       
-      // Clear auth data
+      // Call logout endpoint (if available)
+      // try {
+      //   await authService.logout();
+      // } catch (logoutError) {
+      //   // Continue with logout even if API call fails
+      //   console.log('Logout API error:', logoutError);
+      // }
+      
+      // Clear React Query cache FIRST (before clearing auth data)
+      clearQueryCache();
+      
+      // Clear auth data from storage
       await clearAuthData();
       
-      // Dispatch logout action
+      // Dispatch logout action to update state
       dispatch({ type: "LOGOUT" });
       
       // Navigate to login screen
       router.dismissAll();
       router.replace("/SignIn");
+      
+      console.log('Logout completed successfully');
     } catch (error) {
-      console.error("Error during logout:", error);
+      console.log("Error during logout:", error);
+      
       // Force logout even if there's an error
+      try {
+        clearQueryCache(); // Still try to clear cache
+        await clearAuthData(); // Still try to clear auth data
+      } catch (cleanupError) {
+        console.log("Error during cleanup:", cleanupError);
+      }
+      
       dispatch({ type: "LOGOUT" });
       router.dismissAll();
       router.replace("/SignIn");
@@ -203,14 +242,43 @@ export const AuthContextProvider = ({ children }) => {
       await logout();
       throw new Error('Token expired');
     } catch (error) {
-      console.error('Token refresh error:', error);
+      console.log('Token refresh error:', error);
       await logout();
       throw error;
     }
   };
 
+  // Force logout with cache clear (useful for token expiration)
+  const forceLogout = async (reason = 'Session expired') => {
+    console.log(`Force logout triggered: ${reason}`);
+    
+    try {
+      // Clear React Query cache immediately
+      clearQueryCache();
+      
+      // Clear auth data
+      await clearAuthData();
+      
+      // Update state
+      dispatch({ type: "LOGOUT" });
+      
+      // Navigate to login
+      router.dismissAll();
+      router.replace("/SignIn");
+    } catch (error) {
+      console.log("Error during force logout:", error);
+      // Ensure we still logout even if cleanup fails
+      dispatch({ type: "LOGOUT" });
+      router.dismissAll();
+      router.replace("/SignIn");
+    }
+  };
+
   // Initialize auth state on app start
   useEffect(() => {
+    // Register the forceLogout function with authService
+    setForceLogoutFunction(forceLogout);
+    
     const initializeAuth = async () => {
       try {
         dispatch({ type: "SET_LOADING", payload: true });
@@ -223,14 +291,12 @@ export const AuthContextProvider = ({ children }) => {
 
         // If no remember me preference and no token, logout
         if (!rememberMe && !token) {
-          dispatch({ type: "LOGOUT" });
-          router.replace("/SignIn");
+          await forceLogout('No remember me preference');
           return;
         }
 
         if (!token || !userData) {
-          dispatch({ type: "LOGOUT" });
-          router.replace("/SignIn");
+          await forceLogout('Missing auth data');
           return;
         }
 
@@ -245,16 +311,12 @@ export const AuthContextProvider = ({ children }) => {
           
           router.replace("/(tabs)/home");
         } else {
-          // Token expired, clear data and redirect
-          await clearAuthData();
-          dispatch({ type: "LOGOUT" });
-          router.replace("/SignIn");
+          // Token expired, clear everything and redirect
+          await forceLogout('Token expired');
         }
       } catch (error) {
-        console.error("Error during auth initialization:", error);
-        await clearAuthData();
-        dispatch({ type: "LOGOUT" });
-        router.replace("/SignIn");
+        console.log("Error during auth initialization:", error);
+        await forceLogout('Initialization error');
       }
     };
 
@@ -266,9 +328,11 @@ export const AuthContextProvider = ({ children }) => {
     login,
     register,
     logout,
+    forceLogout, // Export force logout for use in error interceptors
     refreshToken,
     clearError: () => dispatch({ type: "CLEAR_ERROR" }),
     updateUser: (userData) => dispatch({ type: "UPDATE_USER", payload: userData }),
+    clearQueryCache, // Export cache clearing function
   };
 
   return (

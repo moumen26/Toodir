@@ -3,8 +3,8 @@ import { apiClient } from './authService';
 
 const projectService = {
   // Get projects with filtering and pagination
-  getProjects: async (params = {}) => {    
-    const response = await apiClient.get(`/project`, {params});
+  getProjects: async (params = {}) => {
+    const response = await apiClient.get(`/project`, { params });
     return response;
   },
 
@@ -22,7 +22,7 @@ const projectService = {
   createProject: async (projectData) => {
     try {
       const formData = new FormData();
-      
+
       // Add text fields first
       Object.keys(projectData).forEach(key => {
         if (key !== 'images' && key !== 'members' && key !== 'tags') {
@@ -47,7 +47,7 @@ const projectService = {
             type: image.type || 'image/jpeg',
             name: image.name || `image_${index}.jpg`,
           };
-          
+
           formData.append('images', fileObj);
         });
       }
@@ -58,10 +58,10 @@ const projectService = {
         },
         timeout: 30000, // 30 second timeout for image uploads
       });
-      
+
       return response;
     } catch (error) {
-      console.error('Project creation error details:', error);
+      console.log('Project creation error details:', error);
       throw error;
     }
   },
@@ -70,7 +70,7 @@ const projectService = {
   updateProject: async (projectId, projectData) => {
     try {
       const formData = new FormData();
-      
+
       // Add text fields
       Object.keys(projectData).forEach(key => {
         if (key !== 'images') {
@@ -94,7 +94,7 @@ const projectService = {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       return response;
     } catch (error) {
       throw error;
@@ -125,7 +125,7 @@ const projectService = {
   addProjectImages: async (projectId, images) => {
     try {
       const formData = new FormData();
-      
+
       images.forEach((image, index) => {
         formData.append('images', {
           uri: image.uri,
@@ -139,7 +139,7 @@ const projectService = {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       return response;
     } catch (error) {
       throw error;

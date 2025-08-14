@@ -84,6 +84,20 @@ export default function RootLayout() {
                 }}
               />
               <Stack.Screen
+                name="ManageFriends/index"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                }}
+              />
+              <Stack.Screen
+                name="ManageProjectInvitations/index"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                }}
+              />
+              <Stack.Screen
                 name="CreateProject/index"
                 options={{
                   headerShown: false,

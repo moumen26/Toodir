@@ -98,7 +98,7 @@ export const useUpdateProject = () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
     onError: (error) => {
-      console.error('Update project error:', error);
+      console.log('Update project error:', error);
     },
   });
 };
@@ -118,7 +118,7 @@ export const useDeleteProject = () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
     onError: (error) => {
-      console.error('Delete project error:', error);
+      console.log('Delete project error:', error);
     },
   });
 };
@@ -137,7 +137,7 @@ export const useAddProjectImages = () => {
       });
     },
     onError: (error) => {
-      console.error('Add project images error:', error);
+      console.log('Add project images error:', error);
     },
   });
 };
@@ -156,7 +156,7 @@ export const useDeleteProjectImage = () => {
       });
     },
     onError: (error) => {
-      console.error('Delete project image error:', error);
+      console.log('Delete project image error:', error);
     },
   });
 };
@@ -178,7 +178,7 @@ export const useSetPrimaryImage = () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
     onError: (error) => {
-      console.error('Set primary image error:', error);
+      console.log('Set primary image error:', error);
     },
   });
 };
