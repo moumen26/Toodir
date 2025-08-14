@@ -3,24 +3,9 @@ import { apiClient } from './authService';
 
 const projectService = {
   // Get projects with filtering and pagination
-  getProjects: async (params = {}) => {
-    try {     
-      const queryParams = new URLSearchParams();
-      
-      // Add pagination params
-      if (params.page) queryParams.append('page', params.page);
-      if (params.limit) queryParams.append('limit', params.limit);
-      
-      // Add filter params
-      if (params.priority) queryParams.append('priority', params.priority);
-      if (params.search) queryParams.append('search', params.search);
-      if (params.status) queryParams.append('status', params.status);
-      
-      const response = await apiClient.get(`/project?${queryParams.toString()}`);
-      return response;
-    } catch (error) {
-      throw error;
-    }
+  getProjects: async (params = {}) => {    
+    const response = await apiClient.get(`/project`, {params});
+    return response;
   },
 
   // Get single project by ID
@@ -129,7 +114,7 @@ const projectService = {
   // Get project statistics
   getProjectStats: async (projectId) => {
     try {
-      const response = await apiClient.get(`/project/${projectId}/stats`);
+      const response = await apiClient.get(`/project/${projectId}/stats/v1`);
       return response;
     } catch (error) {
       throw error;

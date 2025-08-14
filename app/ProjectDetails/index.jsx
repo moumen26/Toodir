@@ -43,7 +43,7 @@ const ProjectDetails = () => {
   
   const stats = statsData?.data;
 
-  const tabs = ["Overview", "Tasks", "Team", "Files"];
+  const tabs = ["Overview", "Tasks", "Team"];
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -296,16 +296,6 @@ const ProjectDetails = () => {
     </View>
   );
 
-  const renderFilesTab = () => (
-    <View style={styles.tabContent}>
-      <Text style={styles.sectionTitle}>Project Files</Text>
-      <View style={styles.emptyState}>
-        <Ionicons name="folder-outline" size={48} color="#D1D5DB" />
-        <Text style={styles.emptyStateText}>File management coming soon</Text>
-      </View>
-    </View>
-  );
-
   const renderTabContent = () => {
     switch (selectedTab) {
       case "Overview":
@@ -314,8 +304,6 @@ const ProjectDetails = () => {
         return renderTasksTab();
       case "Team":
         return renderTeamTab();
-      case "Files":
-        return renderFilesTab();
       default:
         return renderOverviewTab();
     }

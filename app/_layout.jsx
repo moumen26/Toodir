@@ -77,6 +77,13 @@ export default function RootLayout() {
                 }}
               />
               <Stack.Screen
+                name="TaskDetails/index"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                }}
+              />
+              <Stack.Screen
                 name="CreateProject/index"
                 options={{
                   headerShown: false,

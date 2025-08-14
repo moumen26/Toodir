@@ -112,8 +112,6 @@ const CreateProject = () => {
         }
       });
 
-      console.log('Submitting project data:', projectData);
-
       await createProjectMutation.mutateAsync(projectData);
       
       Alert.alert(

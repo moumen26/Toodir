@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,88 +14,52 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useCreateTask } from "../hooks/useTaskQueries";
+import { useInfiniteProjects } from "../hooks/useProjectQueries";
+import { useTags } from "../hooks/useTagsQueries";
 
-const CreateTask = () => {
+const CreateTaskForm = () => {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    attachments: [],
     color: "",
-    icon: "",
-    project: "",
-    assignedTo: [],
+    project_id: "",
     priority: "",
-    startDate: "",
-    endDate: "",
-    startTime: "",
-    endTime: "",
-    repeat: {
-      enabled: false,
-      type: "",
-      interval: 1,
-      days: [],
-      endType: "never",
-      endAfter: 10,
-      endDate: "",
-    },
+    start_date: "",
+    end_date: "",
+    repetition_type: "none",
+    repetition_interval: 1,
+    repetition_day_of_week: [],
+    assigned_users: [],
   });
 
-  // Mock uploaded files for demonstration
-  const [mockFiles] = useState([
-    {
-      id: 1,
-      name: "Task_Requirements.pdf",
-      size: 1456789,
-      type: "application/pdf",
-    },
-    {
-      id: 2,
-      name: "Design_Reference.png",
-      size: 2345678,
-      type: "image/png",
-      uri: "https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=400",
-    },
-    {
-      id: 3,
-      name: "Specifications.docx",
-      size: 987654,
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-  ]);
-
-  const [showMockFiles, setShowMockFiles] = useState(false);
-
-  // Date picker states
+  const [validationErrors, setValidationErrors] = useState({});
+  
+  // Modal states
+  const [showColorModal, setShowColorModal] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showPriorityModal, setShowPriorityModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerType, setDatePickerType] = useState("");
+  
+  // Optional sections visibility
+  const [showVisualSection, setShowVisualSection] = useState(false);
+  const [showScheduleSection, setShowScheduleSection] = useState(false);
+  const [showRepeatSection, setShowRepeatSection] = useState(false);
+
+  // Date picker states
   const [activeSelector, setActiveSelector] = useState("day");
   const [selectedDay, setSelectedDay] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedYear, setSelectedYear] = useState(null);
 
-  // Time picker states
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timePickerType, setTimePickerType] = useState("");
-  const [selectedHour, setSelectedHour] = useState(null);
-  const [selectedMinute, setSelectedMinute] = useState(null);
-  const [selectedPeriod, setSelectedPeriod] = useState("AM");
+  // Queries
+  const createTaskMutation = useCreateTask();
+  const { data: projectsData } = useInfiniteProjects({ limit: 50 });
+  const { data: tagsData } = useTags();
 
-  // Optional sections visibility
-  const [showVisualSection, setShowVisualSection] = useState(false);
-  const [showScheduleSection, setShowScheduleSection] = useState(false);
-  const [showTimeSection, setShowTimeSection] = useState(false);
-  const [showRepeatSection, setShowRepeatSection] = useState(false);
-
-  // Selection modals states
-  const [showColorModal, setShowColorModal] = useState(false);
-  const [showIconModal, setShowIconModal] = useState(false);
-  const [showProjectModal, setShowProjectModal] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [showPriorityModal, setShowPriorityModal] = useState(false);
-  const [selectedMembers, setSelectedMembers] = useState([]);
-  const [memberSearchQuery, setMemberSearchQuery] = useState("");
-
-  // Sample options data
+  // Sample data (can be moved to constants or fetched from API)
   const taskColors = [
     { id: 1, color: "#EF4444", name: "Red" },
     { id: 2, color: "#F59E0B", name: "Orange" },
@@ -107,118 +71,31 @@ const CreateTask = () => {
     { id: 8, color: "#14B8A6", name: "Teal" },
   ];
 
-  const taskIcons = [
-    { id: 1, name: "checkmark-circle", label: "Complete" },
-    { id: 2, name: "time", label: "Time" },
-    { id: 3, name: "star", label: "Star" },
-    { id: 4, name: "flag", label: "Flag" },
-    { id: 5, name: "bookmark", label: "Bookmark" },
-    { id: 6, name: "heart", label: "Heart" },
-    { id: 7, name: "trophy", label: "Trophy" },
-    { id: 8, name: "lightning-bolt", label: "Bolt" },
-    { id: 9, name: "shield", label: "Shield" },
-    { id: 10, name: "rocket", label: "Rocket" },
-    { id: 11, name: "bulb", label: "Idea" },
-    { id: 12, name: "code-slash", label: "Code" },
-  ];
-
-  const projects = [
-    {
-      id: 1,
-      name: "Dashboard Analytics UI",
-      color: "#3B82F6",
-      icon: "bar-chart",
-    },
-    {
-      id: 2,
-      name: "E-commerce Mobile App",
-      color: "#10B981",
-      icon: "phone-portrait",
-    },
-    {
-      id: 3,
-      name: "Website Redesign",
-      color: "#8B5CF6",
-      icon: "color-palette",
-    },
-    { id: 4, name: "API Integration", color: "#F59E0B", icon: "server" },
-    {
-      id: 5,
-      name: "Mobile Game Development",
-      color: "#EC4899",
-      icon: "game-controller",
-    },
-  ];
-
-  const teamMembers = [
-    {
-      id: 1,
-      name: "John Doe",
-      role: "Lead Developer",
-      email: "john@company.com",
-      avatar: null,
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      role: "UI/UX Designer",
-      email: "jane@company.com",
-      avatar: null,
-    },
-    {
-      id: 3,
-      name: "Mike Johnson",
-      role: "Backend Developer",
-      email: "mike@company.com",
-      avatar: null,
-    },
-    {
-      id: 4,
-      name: "Sarah Wilson",
-      role: "QA Tester",
-      email: "sarah@company.com",
-      avatar: null,
-    },
-    {
-      id: 5,
-      name: "Alex Chen",
-      role: "DevOps Engineer",
-      email: "alex@company.com",
-      avatar: null,
-    },
-    {
-      id: 6,
-      name: "Emma Davis",
-      role: "Product Manager",
-      email: "emma@company.com",
-      avatar: null,
-    },
-  ];
-
   const priorities = [
-    { id: 1, name: "High", color: "#EF4444", icon: "flag" },
-    { id: 2, name: "Medium", color: "#F59E0B", icon: "flag" },
-    { id: 3, name: "Low", color: "#10B981", icon: "flag" },
+    { id: 1, name: "high", label: "High", color: "#EF4444", icon: "flag" },
+    { id: 2, name: "medium", label: "Medium", color: "#F59E0B", icon: "flag" },
+    { id: 3, name: "low", label: "Low", color: "#10B981", icon: "flag" },
   ];
 
   const repeatTypes = [
-    { id: 1, type: "daily", label: "Daily", icon: "today" },
-    { id: 2, type: "weekly", label: "Weekly", icon: "calendar" },
-    { id: 3, type: "monthly", label: "Monthly", icon: "calendar-outline" },
-    { id: 4, type: "yearly", label: "Yearly", icon: "calendar-clear" },
+    { id: 1, type: "none", label: "None", icon: "close" },
+    { id: 2, type: "daily", label: "Daily", icon: "today" },
+    { id: 3, type: "weekly", label: "Weekly", icon: "calendar" },
+    { id: 4, type: "monthly", label: "Monthly", icon: "calendar-outline" },
+    { id: 5, type: "yearly", label: "Yearly", icon: "calendar-clear" },
   ];
 
   const weekDays = [
-    { id: 1, short: "Mon", full: "Monday" },
-    { id: 2, short: "Tue", full: "Tuesday" },
-    { id: 3, short: "Wed", full: "Wednesday" },
-    { id: 4, short: "Thu", full: "Thursday" },
-    { id: 5, short: "Fri", full: "Friday" },
-    { id: 6, short: "Sat", full: "Saturday" },
-    { id: 7, short: "Sun", full: "Sunday" },
+    { id: 0, short: "Mon", full: "Monday", value: 0 },
+    { id: 1, short: "Tue", full: "Tuesday", value: 1 },
+    { id: 2, short: "Wed", full: "Wednesday", value: 2 },
+    { id: 3, short: "Thu", full: "Thursday", value: 3 },
+    { id: 4, short: "Fri", full: "Friday", value: 4 },
+    { id: 5, short: "Sat", full: "Saturday", value: 5 },
+    { id: 6, short: "Sun", full: "Sunday", value: 6 },
   ];
 
-  // Date and time data
+  // Date picker data
   const days = Array.from({ length: 31 }, (_, i) => ({
     value: (i + 1).toString().padStart(2, "0"),
     label: (i + 1).toString(),
@@ -239,139 +116,100 @@ const CreateTask = () => {
     { value: "12", label: "December" },
   ];
 
-  const years = Array.from({ length: 50 }, (_, i) => ({
+  const years = Array.from({ length: 10 }, (_, i) => ({
     value: (new Date().getFullYear() + i).toString(),
     label: (new Date().getFullYear() + i).toString(),
   }));
 
-  const hours = Array.from({ length: 12 }, (_, i) => ({
-    value: (i + 1).toString().padStart(2, "0"),
-    label: (i + 1).toString(),
-  }));
+  // Memoized data
+  const projects = useMemo(() => {
+    if (!projectsData?.pages) return [];
+    return projectsData.pages.flatMap(page => page.data || []);
+  }, [projectsData]);
 
-  const minutes = Array.from({ length: 60 }, (_, i) => ({
-    value: i.toString().padStart(2, "0"),
-    label: i.toString().padStart(2, "0"),
-  }));
+  const selectedProject = useMemo(() => {
+    return projects.find(p => p.id === formData.project_id);
+  }, [projects, formData.project_id]);
 
-  const timePresets = [
-    { label: "9 am", value: "09:00 AM" },
-    { label: "12 pm", value: "12:00 PM" },
-    { label: "4 pm", value: "16:00 PM" },
-    { label: "6 pm", value: "18:00 PM" },
-  ];
+  const selectedPriority = useMemo(() => {
+    return priorities.find(p => p.name === formData.priority);
+  }, [formData.priority]);
 
-  const periods = [
-    { value: "AM", label: "AM" },
-    { value: "PM", label: "PM" },
-  ];
+  const selectedColor = useMemo(() => {
+    return taskColors.find(c => c.color === formData.color);
+  }, [formData.color]);
 
-  const handleBack = () => {
-    router.back();
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleRepeatChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      repeat: {
-        ...prev.repeat,
-        [field]: value,
-      },
-    }));
-  };
-
-  // Mock file upload handlers
-  const handleAttachmentUpload = () => {
-    Alert.alert(
-      "Demo Mode",
-      "File upload functionality will work when you install expo-document-picker. For now, showing mock files.",
-      [
-        {
-          text: "Show Mock Files",
-          onPress: () => {
-            setShowMockFiles(true);
-            handleInputChange("attachments", mockFiles);
-          },
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  };
-
-  const removeAttachment = (attachmentId) => {
-    const updatedAttachments = formData.attachments.filter(
-      (att) => att.id !== attachmentId
-    );
-    handleInputChange("attachments", updatedAttachments);
-    if (updatedAttachments.length === 0) {
-      setShowMockFiles(false);
+  // Form handlers
+  const handleInputChange = useCallback((field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear validation error when user starts typing
+    if (validationErrors[field]) {
+      setValidationErrors(prev => ({ ...prev, [field]: null }));
     }
-  };
+  }, [validationErrors]);
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
+  const validateForm = () => {
+    const errors = {};
 
-  const getFileIcon = (type) => {
-    if (type?.includes("image")) return "image";
-    if (type?.includes("pdf")) return "document-text";
-    if (type?.includes("video")) return "videocam";
-    if (type?.includes("audio")) return "musical-notes";
-    if (type?.includes("word") || type?.includes("doc")) return "document-text";
-    if (type?.includes("excel") || type?.includes("sheet")) return "grid";
-    if (type?.includes("powerpoint") || type?.includes("presentation"))
-      return "easel";
-    if (type?.includes("sketch")) return "color-palette";
-    return "document";
-  };
-
-  const handleCreateTask = () => {
     if (!formData.title.trim()) {
-      Alert.alert("Error", "Task title is required");
+      errors.title = "Task title is required";
+    }
+
+    if (formData.start_date && formData.end_date) {
+      const startDate = new Date(formData.start_date);
+      const endDate = new Date(formData.end_date);
+      if (endDate <= startDate) {
+        errors.end_date = "End date must be after start date";
+      }
+    }
+
+    if (formData.repetition_type === "weekly" && formData.repetition_day_of_week.length === 0) {
+      errors.repetition_day_of_week = "Please select at least one day for weekly repetition";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateTask = async () => {
+    if (!validateForm()) {
+      Alert.alert("Validation Error", "Please fix the errors in the form");
       return;
     }
 
-    // Show summary of task data
-    const summary = `
-Task Created Successfully!
+    try {
+      // Prepare data for API
+      const taskData = {
+        title: formData.title.trim(),
+        description: formData.description?.trim() || null,
+        color: formData.color || null,
+        project_id: formData.project_id || null,
+        priority: formData.priority || "low",
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+        repetition_type: formData.repetition_type || "none",
+        repetition_interval: formData.repetition_interval || 1,
+        repetition_day_of_week: formData.repetition_type === "weekly" ? formData.repetition_day_of_week : null,
+        assigned_users: formData.assigned_users.length > 0 ? formData.assigned_users : null,
+      };
 
-Title: ${formData.title}
-Description: ${formData.description || "No description"}
-Project: ${formData.project || "No project selected"}
-Assigned To: ${selectedMembers.length} members selected
-Priority: ${formData.priority || "No priority set"}
-Color: ${
-      formData.color
-        ? taskColors.find((c) => c.color === formData.color)?.name
-        : "No color"
+      await createTaskMutation.mutateAsync(taskData);
+      
+      Alert.alert(
+        "Success",
+        "Task created successfully!",
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error) {
+      Alert.alert(
+        "Error",
+        error?.response?.data?.message || "Failed to create task. Please try again."
+      );
     }
-Icon: ${
-      formData.icon
-        ? taskIcons.find((i) => i.name === formData.icon)?.label
-        : "No icon selected"
-    }
-Start Date: ${formData.startDate || "Not set"}
-End Date: ${formData.endDate || "Not set"}
-Start Time: ${formData.startTime || "Not set"}
-End Time: ${formData.endTime || "Not set"}
-Repeat: ${getRepeatSummary()}
-Attachments: ${formData.attachments.length} files
-    `;
+  };
 
-    Alert.alert("Task Summary", summary.trim(), [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+  const handleBack = () => {
+    router.back();
   };
 
   // Date picker handlers
@@ -384,16 +222,9 @@ Attachments: ${formData.attachments.length} files
     setShowDatePicker(true);
   };
 
-  const handleDateCancel = () => {
-    setShowDatePicker(false);
-    setSelectedDay(null);
-    setSelectedMonth(null);
-    setSelectedYear(null);
-  };
-
   const handleDateSelect = () => {
     if (selectedDay && selectedMonth && selectedYear) {
-      const dateString = `${selectedDay}/${selectedMonth}/${selectedYear}`;
+      const dateString = `${selectedYear}-${selectedMonth}-${selectedDay}`;
       handleInputChange(datePickerType, dateString);
       setShowDatePicker(false);
     }
@@ -411,75 +242,15 @@ Attachments: ${formData.attachments.length} files
     }
   };
 
-  // Time picker handlers
-  const handleTimePress = (type) => {
-    setTimePickerType(type);
-    setSelectedHour("09");
-    setSelectedMinute("00");
-    setSelectedPeriod("AM");
-    setShowTimePicker(true);
-  };
-
-  const handleTimeCancel = () => {
-    setShowTimePicker(false);
-    setSelectedHour(null);
-    setSelectedMinute(null);
-    setSelectedPeriod("AM");
-  };
-
-  const handleTimeSelect = () => {
-    if (selectedHour && selectedMinute !== null) {
-      const timeString = `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
-      handleInputChange(timePickerType, timeString);
-      setShowTimePicker(false);
-    }
-  };
-
-  const handleTimePreset = (preset) => {
-    handleInputChange(timePickerType, preset.value);
-    setShowTimePicker(false);
-  };
-
-  const handleHourScroll = (hour) => {
-    setSelectedHour(hour.value);
-  };
-
-  const handleMinuteScroll = (minute) => {
-    setSelectedMinute(minute.value);
-  };
-
-  const handlePeriodScroll = (period) => {
-    setSelectedPeriod(period.value);
-  };
-
   // Selection handlers
   const handleColorSelect = (color) => {
     handleInputChange("color", color.color);
     setShowColorModal(false);
   };
 
-  const handleIconSelect = (icon) => {
-    handleInputChange("icon", icon.name);
-    setShowIconModal(false);
-  };
-
   const handleProjectSelect = (project) => {
-    handleInputChange("project", project.name);
+    handleInputChange("project_id", project.id);
     setShowProjectModal(false);
-  };
-
-  const handleMemberToggle = (member) => {
-    const isSelected = selectedMembers.find((m) => m.id === member.id);
-    let newSelectedMembers;
-
-    if (isSelected) {
-      newSelectedMembers = selectedMembers.filter((m) => m.id !== member.id);
-    } else {
-      newSelectedMembers = [...selectedMembers, member];
-    }
-
-    setSelectedMembers(newSelectedMembers);
-    handleInputChange("assignedTo", newSelectedMembers);
   };
 
   const handlePrioritySelect = (priority) => {
@@ -487,54 +258,26 @@ Attachments: ${formData.attachments.length} files
     setShowPriorityModal(false);
   };
 
-  // Repeat handlers
-  const handleRepeatToggle = (enabled) => {
-    handleRepeatChange("enabled", enabled);
-    if (!enabled) {
-      setShowRepeatSection(false);
-    }
-  };
-
   const handleRepeatTypeSelect = (type) => {
-    handleRepeatChange("type", type.type);
-    handleRepeatChange("days", []); // Reset days when type changes
+    handleInputChange("repetition_type", type.type);
+    if (type.type !== "weekly") {
+      handleInputChange("repetition_day_of_week", []);
+    }
   };
 
   const handleWeekDayToggle = (day) => {
-    const currentDays = formData.repeat.days;
-    const isSelected = currentDays.includes(day.short);
+    const currentDays = formData.repetition_day_of_week;
+    const isSelected = currentDays.includes(day.value);
 
     if (isSelected) {
-      handleRepeatChange(
-        "days",
-        currentDays.filter((d) => d !== day.short)
+      handleInputChange(
+        "repetition_day_of_week",
+        currentDays.filter((d) => d !== day.value)
       );
     } else {
-      handleRepeatChange("days", [...currentDays, day.short]);
+      handleInputChange("repetition_day_of_week", [...currentDays, day.value]);
     }
   };
-
-  const getRepeatSummary = () => {
-    const { enabled, type, interval, days } = formData.repeat;
-
-    if (!enabled || !type) return "No repeat";
-
-    let summary = `Every ${interval > 1 ? interval + " " : ""}${type}`;
-
-    if (type === "weekly" && days.length > 0) {
-      summary += ` on ${days.join(", ")}`;
-    }
-
-    return summary;
-  };
-
-  // Filter members based on search query
-  const filteredMembers = teamMembers.filter(
-    (member) =>
-      member.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-      member.role.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(memberSearchQuery.toLowerCase())
-  );
 
   const getCurrentDateData = () => {
     if (activeSelector === "day") return days;
@@ -543,27 +286,18 @@ Attachments: ${formData.attachments.length} files
     return [];
   };
 
-  const renderScrollWheelItem = ({ item }, selectedValue, onPress) => {
-    const isSelected = selectedValue === item.value;
-    return (
-      <TouchableOpacity
-        style={[
-          styles.scrollWheelItem,
-          isSelected && styles.selectedScrollWheelItem,
-        ]}
-        onPress={() => onPress(item)}
-      >
-        <Text
-          style={[
-            styles.scrollWheelItemText,
-            isSelected && styles.selectedScrollWheelItemText,
-          ]}
-        >
-          {item.label}
-        </Text>
-      </TouchableOpacity>
-    );
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
   };
+
+  const renderFormSection = (title, children) => (
+    <View style={styles.formSection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
 
   const renderDateItem = ({ item }) => (
     <TouchableOpacity
@@ -592,34 +326,6 @@ Attachments: ${formData.attachments.length} files
     </TouchableOpacity>
   );
 
-  const renderAvatar = (member, size = 32) => (
-    <View
-      style={[
-        styles.avatar,
-        { width: size, height: size, borderRadius: size / 2 },
-      ]}
-    >
-      {member.avatar ? (
-        <Image
-          source={{ uri: member.avatar }}
-          style={[
-            styles.avatarImage,
-            { width: size, height: size, borderRadius: size / 2 },
-          ]}
-        />
-      ) : (
-        <Ionicons name="person" size={size * 0.6} color="#9CA3AF" />
-      )}
-    </View>
-  );
-
-  const renderFormSection = (title, children) => (
-    <View style={styles.formSection}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -632,74 +338,23 @@ Attachments: ${formData.attachments.length} files
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Attachment Section */}
-        <View style={styles.attachmentSection}>
-          <Text style={styles.sectionTitle}>Attachment</Text>
-          <View style={styles.attachmentContainer}>
-            <TouchableOpacity
-              style={styles.attachmentBox}
-              onPress={handleAttachmentUpload}
-            >
-              <View style={styles.attachmentIcon}>
-                <Ionicons
-                  name="cloud-upload-outline"
-                  size={32}
-                  color="#1C30A4"
-                />
-              </View>
-              <Text style={styles.attachmentText}>Upload task files</Text>
-              <Text style={styles.attachmentSubtext}>
-                Tap to select files (Demo)
-              </Text>
-            </TouchableOpacity>
-
-            {/* Display uploaded files */}
-            {showMockFiles && formData.attachments.length > 0 && (
-              <View style={styles.uploadedFilesContainer}>
-                <Text style={styles.uploadedFilesTitle}>Uploaded Files:</Text>
-                {formData.attachments.map((attachment) => (
-                  <View key={attachment.id} style={styles.fileItem}>
-                    <View style={styles.fileInfo}>
-                      <View style={styles.fileIconContainer}>
-                        <Ionicons
-                          name={getFileIcon(attachment.type)}
-                          size={20}
-                          color="#1C30A4"
-                        />
-                      </View>
-                      <View style={styles.fileDetails}>
-                        <Text style={styles.fileName} numberOfLines={1}>
-                          {attachment.name}
-                        </Text>
-                        <Text style={styles.fileSize}>
-                          {formatFileSize(attachment.size)}
-                        </Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.removeFileButton}
-                      onPress={() => removeAttachment(attachment.id)}
-                    >
-                      <Ionicons name="close-circle" size={20} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
-
         {/* Task Title */}
         {renderFormSection(
           "Task Title",
           <View style={styles.inputContainer}>
             <TextInput
-              style={styles.textInput}
+              style={[
+                styles.textInput,
+                validationErrors.title && styles.inputError
+              ]}
               placeholder="Enter Task Title"
               value={formData.title}
               onChangeText={(value) => handleInputChange("title", value)}
               placeholderTextColor="#9CA3AF"
             />
+            {validationErrors.title && (
+              <Text style={styles.errorText}>{validationErrors.title}</Text>
+            )}
           </View>
         )}
 
@@ -734,117 +389,14 @@ Attachments: ${formData.attachments.length} files
                   style={[
                     styles.dropdownText,
                     { marginLeft: 8 },
-                    !formData.project && styles.placeholderText,
+                    !selectedProject && styles.placeholderText,
                   ]}
                 >
-                  {formData.project || "Select Project"}
+                  {selectedProject?.title || "Select Project (Optional)"}
                 </Text>
               </View>
               <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
             </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Members */}
-        {renderFormSection(
-          "Assign To",
-          <View>
-            <View style={styles.inputContainer}>
-              <TouchableOpacity
-                style={styles.dropdownButton}
-                onPress={() => setShowMembersModal(true)}
-              >
-                <View style={styles.dropdownContent}>
-                  <Ionicons name="people-outline" size={16} color="#1C30A4" />
-                  <Text
-                    style={[
-                      styles.dropdownText,
-                      { marginLeft: 8 },
-                      selectedMembers.length === 0 && styles.placeholderText,
-                    ]}
-                  >
-                    {selectedMembers.length > 0
-                      ? `${selectedMembers.length} members selected`
-                      : "Select Members"}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Enhanced Selected Members Display */}
-            {selectedMembers.length > 0 && (
-              <View style={styles.selectedMembersContainer}>
-                <View style={styles.selectedMembersHeader}>
-                  <Text style={styles.selectedMembersTitle}>
-                    Assigned Members ({selectedMembers.length})
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.editMembersButton}
-                    onPress={() => setShowMembersModal(true)}
-                  >
-                    <Ionicons name="pencil" size={14} color="#1C30A4" />
-                    <Text style={styles.editMembersText}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.membersScrollView}
-                  contentContainerStyle={styles.membersScrollContent}
-                >
-                  {selectedMembers.map((member, index) => (
-                    <View
-                      key={member.id}
-                      style={[
-                        styles.memberCard,
-                        index === 0 && styles.firstMemberCard,
-                        index === selectedMembers.length - 1 &&
-                          styles.lastMemberCard,
-                      ]}
-                    >
-                      <View style={styles.memberCardHeader}>
-                        <View style={styles.memberAvatarContainer}>
-                          {renderAvatar(member, 32)}
-                          <View
-                            style={[
-                              styles.memberStatusDot,
-                              styles.onlineStatus,
-                            ]}
-                          />
-                        </View>
-                        <TouchableOpacity
-                          style={styles.removeMemberCardButton}
-                          onPress={() => handleMemberToggle(member)}
-                        >
-                          <Ionicons name="close" size={12} color="#6B7280" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.memberCardContent}>
-                        <Text style={styles.memberCardName} numberOfLines={1}>
-                          {member.name}
-                        </Text>
-                        <Text style={styles.memberCardRole} numberOfLines={1}>
-                          {member.role}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-
-                  {/* Add Member Button */}
-                  <TouchableOpacity
-                    style={styles.addMemberCard}
-                    onPress={() => setShowMembersModal(true)}
-                  >
-                    <View style={styles.addMemberIcon}>
-                      <Ionicons name="add" size={20} color="#1C30A4" />
-                    </View>
-                    <Text style={styles.addMemberText}>Add Member</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </View>
-            )}
           </View>
         )}
 
@@ -857,15 +409,19 @@ Attachments: ${formData.attachments.length} files
               onPress={() => setShowPriorityModal(true)}
             >
               <View style={styles.dropdownContent}>
-                <Ionicons name="flag-outline" size={16} color="#1C30A4" />
+                <Ionicons 
+                  name="flag-outline" 
+                  size={16} 
+                  color={selectedPriority?.color || "#1C30A4"} 
+                />
                 <Text
                   style={[
                     styles.dropdownText,
                     { marginLeft: 8 },
-                    !formData.priority && styles.placeholderText,
+                    !selectedPriority && styles.placeholderText,
                   ]}
                 >
-                  {formData.priority || "Select Priority"}
+                  {selectedPriority?.label || "Select Priority"}
                 </Text>
               </View>
               <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
@@ -890,12 +446,8 @@ Attachments: ${formData.attachments.length} files
                   color="#1C30A4"
                 />
                 <View style={styles.addSectionContentCol}>
-                  <Text style={styles.addSectionText}>
-                    Add Task Color & Icon
-                  </Text>
-                  <Text style={styles.addSectionSubtext}>
-                    Visual identity for task
-                  </Text>
+                  <Text style={styles.addSectionText}>Add Task Color</Text>
+                  <Text style={styles.addSectionSubtext}>Visual identity for task</Text>
                 </View>
               </View>
               <Ionicons name="add" size={20} color="#1C30A4" />
@@ -912,28 +464,7 @@ Attachments: ${formData.attachments.length} files
                 <Ionicons name="calendar-outline" size={20} color="#1C30A4" />
                 <View style={styles.addSectionContentCol}>
                   <Text style={styles.addSectionText}>Add Task Dates</Text>
-                  <Text style={styles.addSectionSubtext}>
-                    Set start and end dates
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="add" size={20} color="#1C30A4" />
-            </TouchableOpacity>
-          )}
-
-          {/* Add Time Button */}
-          {!showTimeSection && (
-            <TouchableOpacity
-              style={styles.addSectionButton}
-              onPress={() => setShowTimeSection(true)}
-            >
-              <View style={styles.addSectionContent}>
-                <Ionicons name="time-outline" size={20} color="#1C30A4" />
-                <View style={styles.addSectionContentCol}>
-                  <Text style={styles.addSectionText}>Add Task Times</Text>
-                  <Text style={styles.addSectionSubtext}>
-                    Set start and end times
-                  </Text>
+                  <Text style={styles.addSectionSubtext}>Set start and end dates</Text>
                 </View>
               </View>
               <Ionicons name="add" size={20} color="#1C30A4" />
@@ -944,18 +475,13 @@ Attachments: ${formData.attachments.length} files
           {!showRepeatSection && (
             <TouchableOpacity
               style={styles.addSectionButton}
-              onPress={() => {
-                setShowRepeatSection(true);
-                handleRepeatToggle(true);
-              }}
+              onPress={() => setShowRepeatSection(true)}
             >
               <View style={styles.addSectionContent}>
                 <Ionicons name="repeat-outline" size={20} color="#1C30A4" />
                 <View style={styles.addSectionContentCol}>
                   <Text style={styles.addSectionText}>Add Repeat Options</Text>
-                  <Text style={styles.addSectionSubtext}>
-                    Set recurring schedule
-                  </Text>
+                  <Text style={styles.addSectionSubtext}>Set recurring schedule</Text>
                 </View>
               </View>
               <Ionicons name="add" size={20} color="#1C30A4" />
@@ -963,97 +489,59 @@ Attachments: ${formData.attachments.length} files
           )}
         </View>
 
-        {/* Visual Identity Section - Only show when enabled */}
+        {/* Visual Identity Section */}
         {showVisualSection &&
           renderFormSection(
             "Visual Identity",
             <View style={styles.visualContainer}>
               <View style={styles.sectionHeaderWithRemove}>
-                <Text style={styles.inputLabel}>Task Appearance</Text>
+                <Text style={styles.inputLabel}>Task Color</Text>
                 <TouchableOpacity
                   style={styles.removeSectionButton}
                   onPress={() => {
                     setShowVisualSection(false);
                     handleInputChange("color", "");
-                    handleInputChange("icon", "");
                   }}
                 >
                   <Ionicons name="close" size={16} color="#6B7280" />
                 </TouchableOpacity>
               </View>
-              <View style={styles.dateRow}>
-                <View
-                  style={[styles.inputContainer, { flex: 1, marginRight: 6 }]}
-                >
-                  <Text style={styles.inputLabel}>Color</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownButton}
-                    onPress={() => setShowColorModal(true)}
+              
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => setShowColorModal(true)}
+              >
+                <View style={styles.dropdownContent}>
+                  {formData.color ? (
+                    <View
+                      style={[
+                        styles.colorPreview,
+                        { backgroundColor: formData.color },
+                      ]}
+                    />
+                  ) : (
+                    <Ionicons
+                      name="color-palette-outline"
+                      size={16}
+                      color="#1C30A4"
+                    />
+                  )}
+                  <Text
+                    style={[
+                      styles.dropdownText,
+                      { marginLeft: 8 },
+                      !formData.color && styles.placeholderText,
+                    ]}
                   >
-                    <View style={styles.dropdownContent}>
-                      {formData.color ? (
-                        <View
-                          style={[
-                            styles.colorPreview,
-                            { backgroundColor: formData.color },
-                          ]}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="color-palette-outline"
-                          size={16}
-                          color="#1C30A4"
-                        />
-                      )}
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          { marginLeft: 8 },
-                          !formData.color && styles.placeholderText,
-                        ]}
-                      >
-                        {formData.color
-                          ? taskColors.find((c) => c.color === formData.color)
-                              ?.name
-                          : "Select Color"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                    {selectedColor?.name || "Select Color"}
+                  </Text>
                 </View>
-                <View
-                  style={[styles.inputContainer, { flex: 1, marginLeft: 6 }]}
-                >
-                  <Text style={styles.inputLabel}>Icon</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownButton}
-                    onPress={() => setShowIconModal(true)}
-                  >
-                    <View style={styles.dropdownContent}>
-                      <Ionicons
-                        name={formData.icon || "apps-outline"}
-                        size={16}
-                        color="#1C30A4"
-                      />
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          { marginLeft: 8 },
-                          !formData.icon && styles.placeholderText,
-                        ]}
-                      >
-                        {formData.icon
-                          ? taskIcons.find((i) => i.name === formData.icon)
-                              ?.label
-                          : "Select Icon"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
+                <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
+              </TouchableOpacity>
             </View>
           )}
 
-        {/* Schedule Section - Only show when enabled */}
+        {/* Schedule Section */}
         {showScheduleSection &&
           renderFormSection(
             "Schedule",
@@ -1064,13 +552,14 @@ Attachments: ${formData.attachments.length} files
                   style={styles.removeSectionButton}
                   onPress={() => {
                     setShowScheduleSection(false);
-                    handleInputChange("startDate", "");
-                    handleInputChange("endDate", "");
+                    handleInputChange("start_date", "");
+                    handleInputChange("end_date", "");
                   }}
                 >
                   <Ionicons name="close" size={16} color="#6B7280" />
                 </TouchableOpacity>
               </View>
+              
               <View style={styles.dateRow}>
                 <View
                   style={[styles.inputContainer, { flex: 1, marginRight: 6 }]}
@@ -1078,7 +567,7 @@ Attachments: ${formData.attachments.length} files
                   <Text style={styles.inputLabel}>Start Date</Text>
                   <TouchableOpacity
                     style={styles.dropdownButton}
-                    onPress={() => handleDatePress("startDate")}
+                    onPress={() => handleDatePress("start_date")}
                   >
                     <View style={styles.dropdownContent}>
                       <Ionicons
@@ -1090,21 +579,23 @@ Attachments: ${formData.attachments.length} files
                         style={[
                           styles.dropdownText,
                           { marginLeft: 8 },
-                          !formData.startDate && styles.placeholderText,
+                          !formData.start_date && styles.placeholderText,
                         ]}
                       >
-                        {formData.startDate || "Select Date"}
+                        {formData.start_date ? formatDate(formData.start_date) : "Select Date"}
                       </Text>
                     </View>
+                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
                   </TouchableOpacity>
                 </View>
+                
                 <View
                   style={[styles.inputContainer, { flex: 1, marginLeft: 6 }]}
                 >
                   <Text style={styles.inputLabel}>End Date</Text>
                   <TouchableOpacity
                     style={styles.dropdownButton}
-                    onPress={() => handleDatePress("endDate")}
+                    onPress={() => handleDatePress("end_date")}
                   >
                     <View style={styles.dropdownContent}>
                       <Ionicons
@@ -1116,86 +607,23 @@ Attachments: ${formData.attachments.length} files
                         style={[
                           styles.dropdownText,
                           { marginLeft: 8 },
-                          !formData.endDate && styles.placeholderText,
+                          !formData.end_date && styles.placeholderText,
                         ]}
                       >
-                        {formData.endDate || "Select Date"}
+                        {formData.end_date ? formatDate(formData.end_date) : "Select Date"}
                       </Text>
                     </View>
+                    <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
                   </TouchableOpacity>
+                  {validationErrors.end_date && (
+                    <Text style={styles.errorText}>{validationErrors.end_date}</Text>
+                  )}
                 </View>
               </View>
             </View>
           )}
 
-        {/* Time Section - Only show when enabled */}
-        {showTimeSection &&
-          renderFormSection(
-            "Time",
-            <View style={styles.timeContainer}>
-              <View style={styles.sectionHeaderWithRemove}>
-                <Text style={styles.inputLabel}>Working Hours</Text>
-                <TouchableOpacity
-                  style={styles.removeSectionButton}
-                  onPress={() => {
-                    setShowTimeSection(false);
-                    handleInputChange("startTime", "");
-                    handleInputChange("endTime", "");
-                  }}
-                >
-                  <Ionicons name="close" size={16} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.dateRow}>
-                <View
-                  style={[styles.inputContainer, { flex: 1, marginRight: 6 }]}
-                >
-                  <Text style={styles.inputLabel}>Start Time</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownButton}
-                    onPress={() => handleTimePress("startTime")}
-                  >
-                    <View style={styles.dropdownContent}>
-                      <Ionicons name="time-outline" size={16} color="#1C30A4" />
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          { marginLeft: 8 },
-                          !formData.startTime && styles.placeholderText,
-                        ]}
-                      >
-                        {formData.startTime || "Select Time"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-                <View
-                  style={[styles.inputContainer, { flex: 1, marginLeft: 6 }]}
-                >
-                  <Text style={styles.inputLabel}>End Time</Text>
-                  <TouchableOpacity
-                    style={styles.dropdownButton}
-                    onPress={() => handleTimePress("endTime")}
-                  >
-                    <View style={styles.dropdownContent}>
-                      <Ionicons name="time-outline" size={16} color="#1C30A4" />
-                      <Text
-                        style={[
-                          styles.dropdownText,
-                          { marginLeft: 8 },
-                          !formData.endTime && styles.placeholderText,
-                        ]}
-                      >
-                        {formData.endTime || "Select Time"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          )}
-
-        {/* Repeat Section - Only show when enabled */}
+        {/* Repeat Section */}
         {showRepeatSection &&
           renderFormSection(
             "Repeat Options",
@@ -1206,7 +634,8 @@ Attachments: ${formData.attachments.length} files
                   style={styles.removeSectionButton}
                   onPress={() => {
                     setShowRepeatSection(false);
-                    handleRepeatToggle(false);
+                    handleInputChange("repetition_type", "none");
+                    handleInputChange("repetition_day_of_week", []);
                   }}
                 >
                   <Ionicons name="close" size={16} color="#6B7280" />
@@ -1222,7 +651,7 @@ Attachments: ${formData.attachments.length} files
                       key={type.id}
                       style={[
                         styles.repeatTypeButton,
-                        formData.repeat.type === type.type &&
+                        formData.repetition_type === type.type &&
                           styles.selectedRepeatType,
                       ]}
                       onPress={() => handleRepeatTypeSelect(type)}
@@ -1231,7 +660,7 @@ Attachments: ${formData.attachments.length} files
                         name={type.icon}
                         size={14}
                         color={
-                          formData.repeat.type === type.type
+                          formData.repetition_type === type.type
                             ? "#fff"
                             : "#1C30A4"
                         }
@@ -1239,7 +668,7 @@ Attachments: ${formData.attachments.length} files
                       <Text
                         style={[
                           styles.repeatTypeText,
-                          formData.repeat.type === type.type &&
+                          formData.repetition_type === type.type &&
                             styles.selectedRepeatTypeText,
                         ]}
                       >
@@ -1251,33 +680,33 @@ Attachments: ${formData.attachments.length} files
               </View>
 
               {/* Repeat Interval */}
-              {formData.repeat.type && (
+              {formData.repetition_type !== "none" && (
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>
-                    Every {formData.repeat.interval} {formData.repeat.type}
-                    {formData.repeat.interval > 1 ? "s" : ""}
+                    Every {formData.repetition_interval} {formData.repetition_type}
+                    {formData.repetition_interval > 1 ? "s" : ""}
                   </Text>
                   <View style={styles.intervalContainer}>
                     <TouchableOpacity
                       style={styles.intervalButton}
                       onPress={() =>
-                        handleRepeatChange(
-                          "interval",
-                          Math.max(1, formData.repeat.interval - 1)
+                        handleInputChange(
+                          "repetition_interval",
+                          Math.max(1, formData.repetition_interval - 1)
                         )
                       }
                     >
                       <Ionicons name="remove" size={16} color="#1C30A4" />
                     </TouchableOpacity>
                     <Text style={styles.intervalText}>
-                      {formData.repeat.interval}
+                      {formData.repetition_interval}
                     </Text>
                     <TouchableOpacity
                       style={styles.intervalButton}
                       onPress={() =>
-                        handleRepeatChange(
-                          "interval",
-                          formData.repeat.interval + 1
+                        handleInputChange(
+                          "repetition_interval",
+                          formData.repetition_interval + 1
                         )
                       }
                     >
@@ -1288,7 +717,7 @@ Attachments: ${formData.attachments.length} files
               )}
 
               {/* Weekly Days Selection */}
-              {formData.repeat.type === "weekly" && (
+              {formData.repetition_type === "weekly" && (
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>Repeat on</Text>
                   <View style={styles.weekDaysContainer}>
@@ -1297,7 +726,7 @@ Attachments: ${formData.attachments.length} files
                         key={day.id}
                         style={[
                           styles.weekDayButton,
-                          formData.repeat.days.includes(day.short) &&
+                          formData.repetition_day_of_week.includes(day.value) &&
                             styles.selectedWeekDay,
                         ]}
                         onPress={() => handleWeekDayToggle(day)}
@@ -1305,7 +734,7 @@ Attachments: ${formData.attachments.length} files
                         <Text
                           style={[
                             styles.weekDayText,
-                            formData.repeat.days.includes(day.short) &&
+                            formData.repetition_day_of_week.includes(day.value) &&
                               styles.selectedWeekDayText,
                           ]}
                         >
@@ -1314,26 +743,29 @@ Attachments: ${formData.attachments.length} files
                       </TouchableOpacity>
                     ))}
                   </View>
+                  {validationErrors.repetition_day_of_week && (
+                    <Text style={styles.errorText}>
+                      {validationErrors.repetition_day_of_week}
+                    </Text>
+                  )}
                 </View>
               )}
-
-              {/* Repeat Summary */}
-              <View style={styles.repeatSummaryContainer}>
-                <Text style={styles.repeatSummaryLabel}>Summary:</Text>
-                <Text style={styles.repeatSummaryText}>
-                  {getRepeatSummary()}
-                </Text>
-              </View>
             </View>
           )}
 
         {/* Create Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={styles.createButton}
+            style={[
+              styles.createButton,
+              createTaskMutation.isLoading && styles.disabledButton
+            ]}
             onPress={handleCreateTask}
+            disabled={createTaskMutation.isLoading}
           >
-            <Text style={styles.createButtonText}>Create Task</Text>
+            <Text style={styles.createButtonText}>
+              {createTaskMutation.isLoading ? "Creating..." : "Create Task"}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -1351,7 +783,7 @@ Attachments: ${formData.attachments.length} files
           onPress={() => setShowColorModal(false)}
         >
           <TouchableOpacity
-            style={styles.dynamicModalContainer}
+            style={styles.modalContainer}
             activeOpacity={1}
             onPress={() => {}}
           >
@@ -1378,75 +810,10 @@ Attachments: ${formData.attachments.length} files
             </View>
 
             <TouchableOpacity
-              style={styles.cancelModalButton}
+              style={styles.cancelButton}
               onPress={() => setShowColorModal(false)}
             >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Icon Modal */}
-      <Modal
-        visible={showIconModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowIconModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowIconModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.dynamicModalContainer}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Task Icon</Text>
-            </View>
-
-            <ScrollView
-              style={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.iconGrid}>
-                {taskIcons.map((icon) => (
-                  <TouchableOpacity
-                    key={icon.id}
-                    style={[
-                      styles.iconItem,
-                      formData.icon === icon.name && styles.selectedIconItem,
-                    ]}
-                    onPress={() => handleIconSelect(icon)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={icon.name}
-                      size={24}
-                      color={formData.icon === icon.name ? "#fff" : "#1C30A4"}
-                    />
-                    <Text
-                      style={[
-                        styles.iconItemText,
-                        formData.icon === icon.name &&
-                          styles.selectedIconItemText,
-                      ]}
-                    >
-                      {icon.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.cancelModalButton}
-              onPress={() => setShowIconModal(false)}
-            >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1465,7 +832,7 @@ Attachments: ${formData.attachments.length} files
           onPress={() => setShowProjectModal(false)}
         >
           <TouchableOpacity
-            style={styles.dynamicModalContainer}
+            style={styles.modalContainer}
             activeOpacity={1}
             onPress={() => {}}
           >
@@ -1477,41 +844,40 @@ Attachments: ${formData.attachments.length} files
               style={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
+              {/* No Project Option */}
+              <TouchableOpacity
+                style={[
+                  styles.optionItem,
+                  !formData.project_id && styles.selectedOptionItem,
+                ]}
+                onPress={() => {
+                  handleInputChange("project_id", "");
+                  setShowProjectModal(false);
+                }}
+              >
+                <View style={styles.optionContent}>
+                  <Ionicons name="close-circle" size={20} color="#6B7280" />
+                  <Text style={styles.optionText}>No Project</Text>
+                </View>
+                {!formData.project_id && (
+                  <Ionicons name="checkmark" size={20} color="#1C30A4" />
+                )}
+              </TouchableOpacity>
+
               {projects.map((project) => (
                 <TouchableOpacity
                   key={project.id}
                   style={[
                     styles.optionItem,
-                    formData.project === project.name &&
-                      styles.selectedOptionItem,
+                    formData.project_id === project.id && styles.selectedOptionItem,
                   ]}
                   onPress={() => handleProjectSelect(project)}
-                  activeOpacity={0.7}
                 >
                   <View style={styles.optionContent}>
-                    <View
-                      style={[
-                        styles.tagColorDot,
-                        { backgroundColor: project.color },
-                      ]}
-                    />
-                    <Ionicons
-                      name={project.icon}
-                      size={20}
-                      color={project.color}
-                      style={styles.optionIcon}
-                    />
-                    <Text
-                      style={[
-                        styles.optionText,
-                        formData.project === project.name &&
-                          styles.selectedOptionText,
-                      ]}
-                    >
-                      {project.name}
-                    </Text>
+                    <Ionicons name="folder" size={20} color="#1C30A4" />
+                    <Text style={styles.optionText}>{project.title}</Text>
                   </View>
-                  {formData.project === project.name && (
+                  {formData.project_id === project.id && (
                     <Ionicons name="checkmark" size={20} color="#1C30A4" />
                   )}
                 </TouchableOpacity>
@@ -1519,131 +885,11 @@ Attachments: ${formData.attachments.length} files
             </ScrollView>
 
             <TouchableOpacity
-              style={styles.cancelModalButton}
+              style={styles.cancelButton}
               onPress={() => setShowProjectModal(false)}
             >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Members Modal */}
-      <Modal
-        visible={showMembersModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowMembersModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMembersModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.membersModalContainer}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Assign Team Members</Text>
-              <Text style={styles.modalSubtitle}>
-                {selectedMembers.length} of {teamMembers.length} selected
-              </Text>
-            </View>
-
-            {/* Search Input */}
-            <View style={styles.searchInputContainer}>
-              <Ionicons
-                name="search"
-                size={20}
-                color="#9CA3AF"
-                style={styles.searchIcon}
-              />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search members..."
-                value={memberSearchQuery}
-                onChangeText={setMemberSearchQuery}
-                placeholderTextColor="#9CA3AF"
-              />
-              {memberSearchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setMemberSearchQuery("")}>
-                  <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <ScrollView
-              style={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {filteredMembers.map((member) => {
-                const isSelected = selectedMembers.find(
-                  (m) => m.id === member.id
-                );
-                return (
-                  <TouchableOpacity
-                    key={member.id}
-                    style={[
-                      styles.memberItem,
-                      isSelected && styles.selectedMemberItem,
-                    ]}
-                    onPress={() => handleMemberToggle(member)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.memberInfo}>
-                      {renderAvatar(member, 40)}
-                      <View style={styles.memberDetails}>
-                        <Text
-                          style={[
-                            styles.memberName,
-                            isSelected && styles.selectedMemberName,
-                          ]}
-                        >
-                          {member.name}
-                        </Text>
-                        <Text style={styles.memberRole}>{member.role}</Text>
-                        <Text style={styles.memberEmail}>{member.email}</Text>
-                      </View>
-                    </View>
-                    <View
-                      style={[styles.checkbox, isSelected && styles.checkedBox]}
-                    >
-                      {isSelected && (
-                        <Ionicons name="checkmark" size={16} color="#fff" />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-              {filteredMembers.length === 0 && (
-                <View style={styles.noResultsContainer}>
-                  <Ionicons name="search" size={48} color="#D1D5DB" />
-                  <Text style={styles.noResultsText}>No members found</Text>
-                  <Text style={styles.noResultsSubtext}>
-                    Try adjusting your search terms
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.membersModalButtons}>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setShowMembersModal(false)}
-              >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmMembersButton}
-                onPress={() => setShowMembersModal(false)}
-              >
-                <Text style={styles.confirmMembersButtonText}>
-                  Done ({selectedMembers.length})
-                </Text>
-              </TouchableOpacity>
-            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -1661,7 +907,7 @@ Attachments: ${formData.attachments.length} files
           onPress={() => setShowPriorityModal(false)}
         >
           <TouchableOpacity
-            style={styles.dynamicModalContainer}
+            style={styles.modalContainer}
             activeOpacity={1}
             onPress={() => {}}
           >
@@ -1675,11 +921,9 @@ Attachments: ${formData.attachments.length} files
                   key={priority.id}
                   style={[
                     styles.priorityItem,
-                    formData.priority === priority.name &&
-                      styles.selectedPriorityItem,
+                    formData.priority === priority.name && styles.selectedPriorityItem,
                   ]}
                   onPress={() => handlePrioritySelect(priority)}
-                  activeOpacity={0.7}
                 >
                   <View style={styles.priorityContent}>
                     <Ionicons
@@ -1691,11 +935,9 @@ Attachments: ${formData.attachments.length} files
                       style={[
                         styles.priorityText,
                         { color: priority.color },
-                        formData.priority === priority.name &&
-                          styles.selectedPriorityText,
                       ]}
                     >
-                      {priority.name} Priority
+                      {priority.label} Priority
                     </Text>
                   </View>
                   {formData.priority === priority.name && (
@@ -1706,10 +948,10 @@ Attachments: ${formData.attachments.length} files
             </View>
 
             <TouchableOpacity
-              style={styles.cancelModalButton}
+              style={styles.cancelButton}
               onPress={() => setShowPriorityModal(false)}
             >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1720,7 +962,7 @@ Attachments: ${formData.attachments.length} files
         visible={showDatePicker}
         transparent={true}
         animationType="slide"
-        onRequestClose={handleDateCancel}
+        onRequestClose={() => setShowDatePicker(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -1803,7 +1045,7 @@ Attachments: ${formData.attachments.length} files
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={handleDateCancel}
+                onPress={() => setShowDatePicker(false)}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -1819,115 +1061,6 @@ Attachments: ${formData.attachments.length} files
                 <Text style={styles.confirmButtonText}>Confirm</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Time Picker Modal */}
-      <Modal
-        visible={showTimePicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={handleTimeCancel}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.timeModalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Time</Text>
-            </View>
-
-            {/* Time Display */}
-            <View style={styles.timeDisplayContainer}>
-              <Text style={styles.currentTimeText}>
-                {selectedHour || "09"} : {selectedMinute || "00"}{" "}
-                {selectedPeriod}
-              </Text>
-            </View>
-
-            {/* Scroll Wheels */}
-            <View style={styles.scrollWheelsContainer}>
-              {/* Hours Wheel */}
-              <View style={styles.scrollWheelColumn}>
-                <FlatList
-                  data={hours}
-                  renderItem={(props) =>
-                    renderScrollWheelItem(props, selectedHour, handleHourScroll)
-                  }
-                  keyExtractor={(item) => `hour-${item.value}`}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollWheelList}
-                  contentContainerStyle={styles.scrollWheelContent}
-                />
-                <View style={styles.scrollWheelOverlay} />
-              </View>
-
-              {/* Colon Separator */}
-              <View style={styles.colonSeparator}>
-                <Text style={styles.colonText}>:</Text>
-              </View>
-
-              {/* Minutes Wheel */}
-              <View style={styles.scrollWheelColumn}>
-                <FlatList
-                  data={minutes}
-                  renderItem={(props) =>
-                    renderScrollWheelItem(
-                      props,
-                      selectedMinute,
-                      handleMinuteScroll
-                    )
-                  }
-                  keyExtractor={(item) => `minute-${item.value}`}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollWheelList}
-                  contentContainerStyle={styles.scrollWheelContent}
-                />
-                <View style={styles.scrollWheelOverlay} />
-              </View>
-
-              {/* AM/PM Wheel */}
-              <View style={styles.scrollWheelColumn}>
-                <FlatList
-                  data={periods}
-                  renderItem={(props) =>
-                    renderScrollWheelItem(
-                      props,
-                      selectedPeriod,
-                      handlePeriodScroll
-                    )
-                  }
-                  keyExtractor={(item) => `period-${item.value}`}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.scrollWheelList}
-                  contentContainerStyle={styles.scrollWheelContent}
-                />
-                <View style={styles.scrollWheelOverlay} />
-              </View>
-            </View>
-
-            {/* Time Presets */}
-            <View style={styles.presetsContainer}>
-              <Text style={styles.presetsTitle}>Presets</Text>
-              <View style={styles.presetsRow}>
-                {timePresets.map((preset, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.presetButton}
-                    onPress={() => handleTimePreset(preset)}
-                  >
-                    <Text style={styles.presetButtonText}>{preset.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Done Button */}
-            <TouchableOpacity
-              style={styles.doneButton}
-              onPress={handleTimeSelect}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1969,98 +1102,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
-  attachmentSection: {
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  attachmentContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  attachmentBox: {
-    borderWidth: 2,
-    borderColor: "#1C30A4",
-    borderStyle: "dashed",
-    borderRadius: 8,
-    padding: 24,
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-  },
-  attachmentIcon: {
-    marginBottom: 8,
-  },
-  attachmentText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-    marginBottom: 4,
-  },
-  attachmentSubtext: {
-    fontSize: 12,
-    color: "#9CA3AF",
-  },
-  uploadedFilesContainer: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-  },
-  uploadedFilesTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6B7280",
-    marginBottom: 8,
-  },
-  fileItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  fileInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  fileIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#EEF2FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  fileDetails: {
-    flex: 1,
-  },
-  fileName: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-    marginBottom: 2,
-  },
-  fileSize: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  removeFileButton: {
-    padding: 4,
-  },
   formSection: {
     marginBottom: 16,
+    marginTop: 20,
   },
   sectionTitle: {
     fontSize: 16,
@@ -2089,9 +1133,18 @@ const styles = StyleSheet.create({
     color: "#374151",
     padding: 0,
   },
+  inputError: {
+    borderColor: "#EF4444",
+    borderWidth: 1,
+  },
   textArea: {
     height: 80,
     textAlignVertical: "top",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#EF4444",
+    marginTop: 4,
   },
   dropdownButton: {
     flexDirection: "row",
@@ -2118,139 +1171,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
-  selectedMembersContainer: {
-    marginTop: 12,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  selectedMembersHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  selectedMembersTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  editMembersButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  editMembersText: {
-    fontSize: 12,
-    color: "#1C30A4",
-    fontWeight: "500",
-    marginLeft: 4,
-  },
-  membersScrollView: {
-    flexGrow: 0,
-  },
-  membersScrollContent: {
-    paddingHorizontal: 2,
-  },
-  memberCard: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 4,
-    width: 100,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  firstMemberCard: {
-    marginLeft: 0,
-  },
-  lastMemberCard: {
-    marginRight: 0,
-  },
-  memberCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  memberAvatarContainer: {
-    position: "relative",
-  },
-  memberStatusDot: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  onlineStatus: {
-    backgroundColor: "#10B981",
-  },
-  removeMemberCardButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  memberCardContent: {
-    alignItems: "flex-start",
-  },
-  memberCardName: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 2,
-  },
-  memberCardRole: {
-    fontSize: 10,
-    color: "#6B7280",
-  },
-  addMemberCard: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 12,
-    padding: 12,
-    marginLeft: 4,
-    width: 100,
-    borderWidth: 2,
-    borderColor: "#1C30A4",
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-    minHeight: 88,
-  },
-  addMemberIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#EEF2FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  addMemberText: {
-    fontSize: 10,
-    color: "#1C30A4",
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  // Optional sections styles
   optionalSectionsContainer: {
     marginBottom: 16,
   },
@@ -2277,11 +1197,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addSectionContentCol: {
-    flexDirection: "column",
-    textAlign: "right",
-    flex: 1,
-    alignContent: "flex-start",
     marginLeft: 8,
+    flex: 1,
   },
   addSectionText: {
     fontSize: 14,
@@ -2328,16 +1245,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  timeContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
   repeatContainer: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -2352,7 +1259,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
   },
-  // Repeat styles
   repeatTypeContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2432,24 +1338,6 @@ const styles = StyleSheet.create({
   selectedWeekDayText: {
     color: "#fff",
   },
-  repeatSummaryContainer: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  repeatSummaryLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "500",
-    marginBottom: 4,
-  },
-  repeatSummaryText: {
-    fontSize: 14,
-    color: "#1C30A4",
-    fontWeight: "600",
-  },
   buttonContainer: {
     paddingVertical: 20,
     paddingBottom: 40,
@@ -2465,20 +1353,14 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  disabledButton: {
+    backgroundColor: "#9CA3AF",
+    shadowOpacity: 0.1,
+  },
   createButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#fff",
-  },
-  avatar: {
-    backgroundColor: "#F3F4F6",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  avatarImage: {
-    resizeMode: "cover",
   },
   modalOverlay: {
     flex: 1,
@@ -2507,6 +1389,93 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     marginTop: 5,
+  },
+  modalScrollContent: {
+    flexGrow: 0,
+    flexShrink: 1,
+    maxHeight: 300,
+  },
+  colorGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  colorItem: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginBottom: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  selectedColorItem: {
+    borderColor: "#374151",
+  },
+  optionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  selectedOptionItem: {
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#1C30A4",
+  },
+  optionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  optionText: {
+    fontSize: 16,
+    color: "#374151",
+    fontWeight: "500",
+    marginLeft: 12,
+  },
+  priorityList: {
+    marginBottom: 20,
+  },
+  priorityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  selectedPriorityItem: {
+    backgroundColor: "#EEF2FF",
+    borderWidth: 1,
+    borderColor: "#1C30A4",
+  },
+  priorityContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  priorityText: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 12,
+  },
+  cancelButton: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: "#6B7280",
+    fontSize: 16,
+    fontWeight: "500",
   },
   progressContainer: {
     flexDirection: "row",
@@ -2579,20 +1548,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-  cancelButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
-    fontWeight: "500",
-  },
   confirmButton: {
     flex: 1,
     backgroundColor: "#1C30A4",
@@ -2607,386 +1562,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  disabledButton: {
-    backgroundColor: "#D1D5DB",
-  },
-  // Time Modal Specific Styles
-  timeModalContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 20,
-    width: "90%",
-    maxWidth: 350,
-    alignItems: "center",
-  },
-  timeDisplayContainer: {
-    alignItems: "center",
-    marginBottom: 30,
-  },
-  currentTimeText: {
-    fontSize: 32,
-    fontWeight: "600",
-    color: "#374151",
-    letterSpacing: 2,
-  },
-  scrollWheelsContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 180,
-    marginBottom: 30,
-  },
-  scrollWheelColumn: {
-    flex: 1,
-    position: "relative",
-  },
-  colonSeparator: {
-    width: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  colonText: {
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  scrollWheelList: {
-    flex: 1,
-  },
-  scrollWheelContent: {
-    paddingVertical: 88,
-  },
-  scrollWheelItem: {
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
-  selectedScrollWheelItem: {
-    backgroundColor: "rgba(79, 70, 229, 0.1)",
-    borderRadius: 8,
-  },
-  scrollWheelItemText: {
-    fontSize: 18,
-    color: "#9CA3AF",
-    fontWeight: "400",
-  },
-  selectedScrollWheelItemText: {
-    color: "#1C30A4",
-    fontWeight: "600",
-    fontSize: 20,
-  },
-  scrollWheelOverlay: {
-    position: "absolute",
-    top: 88,
-    left: 0,
-    right: 0,
-    height: 44,
-    pointerEvents: "none",
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "rgba(79, 70, 229, 0.2)",
-  },
-  presetsContainer: {
-    width: "100%",
-    marginBottom: 20,
-  },
-  presetsTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B7280",
-    marginBottom: 12,
-    textAlign: "left",
-  },
-  presetsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  presetButton: {
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    flex: 1,
-    marginHorizontal: 4,
-    alignItems: "center",
-  },
-  presetButtonText: {
-    fontSize: 14,
-    color: "#1C30A4",
-    fontWeight: "500",
-  },
-  doneButton: {
-    backgroundColor: "#1C30A4",
-    borderRadius: 12,
-    paddingVertical: 14,
-    width: "100%",
-    alignItems: "center",
-  },
-  doneButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  // Selection Modal Styles
-  dynamicModalContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 20,
-    width: "90%",
-    maxWidth: 400,
-    alignSelf: "center",
-    maxHeight: "80%",
-  },
-  membersModalContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 20,
-    width: "90%",
-    maxWidth: 400,
-    alignSelf: "center",
-    maxHeight: "80%",
-  },
-  modalScrollContent: {
-    flexGrow: 0,
-    flexShrink: 1,
-  },
-  searchInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#374151",
-  },
-  noResultsContainer: {
-    alignItems: "center",
-    paddingVertical: 40,
-  },
-  noResultsText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#6B7280",
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  noResultsSubtext: {
-    fontSize: 14,
-    color: "#9CA3AF",
-  },
-  colorGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  colorItem: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginBottom: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  selectedColorItem: {
-    borderColor: "#374151",
-  },
-  iconGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  iconItem: {
-    width: "30%",
-    aspectRatio: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  selectedIconItem: {
-    backgroundColor: "#1C30A4",
-    borderColor: "#1C30A4",
-  },
-  iconItemText: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  selectedIconItemText: {
-    color: "#fff",
-  },
-  optionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-  selectedOptionItem: {
-    backgroundColor: "#EEF2FF",
-    borderWidth: 1,
-    borderColor: "#1C30A4",
-  },
-  optionContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  tagColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  optionIcon: {
-    marginRight: 12,
-  },
-  optionText: {
-    fontSize: 16,
-    color: "#374151",
-    fontWeight: "500",
-  },
-  selectedOptionText: {
-    color: "#1C30A4",
-    fontWeight: "600",
-  },
-  memberItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  selectedMemberItem: {
-    backgroundColor: "#EEF2FF",
-    borderWidth: 1,
-    borderColor: "#1C30A4",
-  },
-  memberInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  memberDetails: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 2,
-  },
-  selectedMemberName: {
-    color: "#1C30A4",
-  },
-  memberRole: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 1,
-  },
-  memberEmail: {
-    fontSize: 11,
-    color: "#9CA3AF",
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#D1D5DB",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkedBox: {
-    backgroundColor: "#1C30A4",
-    borderColor: "#1C30A4",
-  },
-  membersModalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  confirmMembersButton: {
-    flex: 1,
-    backgroundColor: "#1C30A4",
-    borderRadius: 8,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 10,
-  },
-  confirmMembersButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  priorityList: {
-    marginBottom: 20,
-  },
-  priorityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  selectedPriorityItem: {
-    backgroundColor: "#EEF2FF",
-    borderWidth: 1,
-    borderColor: "#1C30A4",
-  },
-  priorityContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  priorityText: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginLeft: 12,
-  },
-  selectedPriorityText: {
-    fontWeight: "600",
-  },
-  cancelModalButton: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    flex: 1,
-    marginRight: 10,
-  },
-  cancelModalButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
-    fontWeight: "500",
-  },
 });
 
-export default CreateTask;
+export default CreateTaskForm;

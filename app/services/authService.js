@@ -39,10 +39,7 @@ apiClient.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const originalRequest = error.config;
-    console.log("==========================================ERROR==========================================");
-    console.log(originalRequest);
-    console.log("==========================================END-ERROR==========================================");
-    
+
     // Handle 401 errors (unauthorized)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
