@@ -1,8 +1,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '../constants/storage';
-import Constants from 'expo-constants';
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from 'expo-constants';
 
 // Get API URL from Expo Constants
 const API_URL = Constants.expoConfig?.extra?.apiUrl;
@@ -39,7 +39,9 @@ apiClient.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const originalRequest = error.config;
-    // console.log(error.response);
+    console.log("==========================================ERROR==========================================");
+    console.log(originalRequest);
+    console.log("==========================================END-ERROR==========================================");
     
     // Handle 401 errors (unauthorized)
     if (error.response?.status === 401 && !originalRequest._retry) {
