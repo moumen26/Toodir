@@ -84,10 +84,10 @@ const TaskDetail = () => {
         taskId: task.id,
         closed: !task.closed
       });
-    } catch (error) {
+    } catch (error) {      
       Alert.alert(
         "Error",
-        error?.response?.data?.message || "Failed to update task status"
+        error?.data?.message || "Failed to update task status"
       );
     }
   }, [task, closeTaskMutation]);

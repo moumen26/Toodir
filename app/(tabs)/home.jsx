@@ -408,7 +408,7 @@ const Home = () => {
         </View>
 
         {/* Today's Overview Stats */}
-        <View style={styles.statsSection}>
+        {/* <View style={styles.statsSection}>
           <View style={styles.mainStatCard}>
             <View style={styles.mainStatHeader}>
               <Text style={styles.mainStatTitle}>Today's Progress</Text>
@@ -494,7 +494,8 @@ const Home = () => {
               </View>
             </View>
           </View>
-        </View>
+        </View> */}
+        
         {/* Today's Tasks Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>

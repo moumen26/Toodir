@@ -92,9 +92,13 @@ apiClient.interceptors.response.use(
     // Handle 403 errors (forbidden)
     if (error.response?.status === 403) {
       const serverMessage = error.response?.data?.message || 
-                           error.response?.data?.error ||
-                           'Access denied';
-      return Promise.reject(new Error(serverMessage));
+      error.response?.data?.error ||
+      'Access denied';
+      
+      const customError = new Error(serverMessage);
+      customError.status = error.response.status;
+      customError.data = error.response.data;
+      return Promise.reject(customError);
     }
 
     // Handle 422 errors (validation errors)
