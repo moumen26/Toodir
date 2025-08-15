@@ -10,108 +10,76 @@ import {
   Alert,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useCreateHabit } from "../hooks/useHabitsQueries";
+import { useTags } from "../hooks/useTagsQueries";
 
 const CreateHabit = () => {
   const [formData, setFormData] = useState({
     name: "",
-    tag: "",
-    icon: "",
-    repetitionCount: "01",
-    unit: "Times",
-    repeat: {
-      enabled: true,
-      type: "daily",
-      interval: 1,
-      days: [1], // Tuesday selected by default (0=Mon, 1=Tue, etc.)
-      endType: "never",
-      endAfter: 10,
-      endDate: "",
-    },
-    remindTime: "",
+    tags: [],
+    repetition_count: 1,
+    unit: "unit",
+    repetition_type: "daily",
+    repetition_interval: 1,
+    repetition_day_of_week: [],
+    reminder_time: "",
+    is_active: true,
   });
 
   // Modal states
   const [showTagModal, setShowTagModal] = useState(false);
   const [showCreateTagModal, setShowCreateTagModal] = useState(false);
-  const [showIconModal, setShowIconModal] = useState(false);
   const [showUnitModal, setShowUnitModal] = useState(false);
   const [showTimeModal, setShowTimeModal] = useState(false);
 
   // Section visibility
-  const [showRepeatSection, setShowRepeatSection] = useState(false);
+  const [showRepeatSection, setShowRepeatSection] = useState(true);
 
   // New tag creation
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3B82F6");
-  const [availableTags, setAvailableTags] = useState([
-    { name: "Islamic", color: "#10B981" },
-    { name: "Fun", color: "#F59E0B" },
-    { name: "Personal Development", color: "#8B5CF6" },
-    { name: "Self Care", color: "#EC4899" },
-    { name: "Quit Bad Habits", color: "#06B6D4" },
-    { name: "Relationships", color: "#EF4444" },
-    { name: "Home", color: "#6B7280" },
-    { name: "Diet", color: "#84CC16" },
-    { name: "Health Care", color: "#3B82F6" },
-  ]);
 
   // Time picker states
   const [selectedHour, setSelectedHour] = useState("09");
   const [selectedMinute, setSelectedMinute] = useState("00");
   const [selectedPeriod, setSelectedPeriod] = useState("AM");
 
-  const tagColors = [
-    "#3B82F6", // Blue
-    "#374151", // Gray
-    "#EF4444", // Red
-    "#10B981", // Green
-    "#06B6D4", // Cyan
-    "#F59E0B", // Amber
-    "#8B5CF6", // Purple
-  ];
+  // API hooks
+  const createHabitMutation = useCreateHabit();
+  const { data: tagsData, isLoading: tagsLoading } = useTags();
 
-  const habitIcons = [
-    { id: 1, name: "medical-outline", label: "Health" },
-    { id: 2, name: "fitness-outline", label: "Fitness" },
-    { id: 3, name: "book-outline", label: "Reading" },
-    { id: 4, name: "moon-outline", label: "Sleep" },
-    { id: 5, name: "water-outline", label: "Water" },
-    { id: 6, name: "walk-outline", label: "Walking" },
-    { id: 7, name: "bicycle-outline", label: "Cycling" },
-    { id: 8, name: "barbell-outline", label: "Gym" },
-    { id: 9, name: "restaurant-outline", label: "Eating" },
-    { id: 10, name: "time-outline", label: "Time" },
-    { id: 11, name: "phone-portrait-outline", label: "Phone" },
-    { id: 12, name: "musical-notes-outline", label: "Music" },
-  ];
+  const availableTags = tagsData?.data || [];
 
   const units = [
-    { id: 1, name: "Times" },
-    { id: 2, name: "Minutes" },
-    { id: 3, name: "Hours" },
-    { id: 4, name: "Pages" },
-    { id: 5, name: "Cups" },
-    { id: 6, name: "Steps" },
+    { id: 1, name: "unit", label: "Times" },
+    { id: 2, name: "minute", label: "Minutes" },
+    { id: 3, name: "hour", label: "Hours" },
+    { id: 4, name: "page", label: "Pages" },
+    { id: 5, name: "step", label: "Steps" },
+    { id: 6, name: "km", label: "Kilometers" },
+    { id: 7, name: "meter", label: "Meters" },
+    { id: 8, name: "time", label: "Sessions" },
   ];
 
   const repeatTypes = [
     { id: 1, type: "daily", label: "Daily", icon: "today" },
     { id: 2, type: "weekly", label: "Weekly", icon: "calendar" },
     { id: 3, type: "monthly", label: "Monthly", icon: "calendar-outline" },
-    { id: 4, type: "one-time", label: "One Time", icon: "calendar-clear" },
+    { id: 4, type: "none", label: "Manual", icon: "hand-left-outline" },
   ];
 
   const weekDays = [
-    { id: 0, short: "Mon", full: "Monday" },
-    { id: 1, short: "Tue", full: "Tuesday" },
-    { id: 2, short: "Wed", full: "Wednesday" },
-    { id: 3, short: "Thu", full: "Thursday" },
-    { id: 4, short: "Fri", full: "Friday" },
-    { id: 5, short: "Sat", full: "Saturday" },
-    { id: 6, short: "Sun", full: "Sunday" },
+    { id: 1, short: "Mon", full: "Monday" },
+    { id: 2, short: "Tue", full: "Tuesday" },
+    { id: 3, short: "Wed", full: "Wednesday" },
+    { id: 4, short: "Thu", full: "Thursday" },
+    { id: 5, short: "Fri", full: "Friday" },
+    { id: 6, short: "Sat", full: "Saturday" },
+    { id: 0, short: "Sun", full: "Sunday" },
   ];
 
   // Time data
@@ -141,76 +109,64 @@ const CreateHabit = () => {
     }));
   };
 
-  const handleRepeatChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      repeat: {
-        ...prev.repeat,
-        [field]: value,
-      },
-    }));
+  const convertTo24HourFormat = (time12h) => {
+    if (!time12h) return null;
+    
+    const [time, period] = time12h.split(' ');
+    const [hours, minutes] = time.split(':');
+    
+    let hour24 = parseInt(hours);
+    if (period === 'PM' && hour24 !== 12) {
+      hour24 += 12;
+    } else if (period === 'AM' && hour24 === 12) {
+      hour24 = 0;
+    }
+    
+    return `${hour24.toString().padStart(2, '0')}:${minutes}`;
   };
 
-  const handleCreateHabit = () => {
+  const handleCreateHabit = async () => {
     if (!formData.name.trim()) {
       Alert.alert("Error", "Habit name is required");
       return;
     }
 
-    // Show summary of habit data
-    const summary = `
-Habit Created Successfully!
-
-Name: ${formData.name}
-Tag: ${formData.tag || "No tag selected"}
-Icon: ${
-      formData.icon
-        ? habitIcons.find((i) => i.name === formData.icon)?.label
-        : "No icon selected"
+    if (formData.repetition_type === 'weekly' && formData.repetition_day_of_week.length === 0) {
+      Alert.alert("Error", "Please select at least one day for weekly habits");
+      return;
     }
-Repetition: ${formData.repetitionCount} ${formData.unit}
-Repeat: ${getRepeatSummary()}
-Remind: ${formData.remindTime || "Not set"}
-    `;
 
-    Alert.alert("Habit Summary", summary.trim(), [
-      { text: "OK", onPress: () => router.back() },
-    ]);
+    try {
+      const habitData = {
+        name: formData.name.trim(),
+        repetition_count: formData.repetition_count,
+        unit: formData.unit,
+        repetition_type: formData.repetition_type,
+        repetition_interval: formData.repetition_interval,
+        repetition_day_of_week: formData.repetition_type === 'weekly' ? formData.repetition_day_of_week : null,
+        reminder_time: formData.reminder_time ? convertTo24HourFormat(formData.reminder_time) : null,
+        is_active: formData.is_active,
+        tags: formData.tags,
+      };
+
+      const response = await createHabitMutation.mutateAsync(habitData);
+      
+      Alert.alert("Success", "Habit created successfully!", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      Alert.alert("Error", error.message || "Failed to create habit");
+    }
   };
 
   // Selection handlers
   const handleTagSelect = (tag) => {
-    handleInputChange("tag", tag.name);
-    setShowTagModal(false);
-  };
-
-  const handleCreateTag = () => {
-    if (newTagName.trim()) {
-      const newTag = { name: newTagName.trim(), color: newTagColor };
-      setAvailableTags((prev) => [...prev, newTag]);
-      handleInputChange("tag", newTag.name);
-      setNewTagName("");
-      setNewTagColor("#3B82F6");
-      setShowCreateTagModal(false);
-      setShowTagModal(false);
+    const isSelected = formData.tags.includes(tag.id);
+    if (isSelected) {
+      handleInputChange("tags", formData.tags.filter(id => id !== tag.id));
+    } else {
+      handleInputChange("tags", [...formData.tags, tag.id]);
     }
-  };
-
-  const handleOpenCreateTag = () => {
-    setShowTagModal(false);
-    setShowCreateTagModal(true);
-  };
-
-  const handleCancelCreateTag = () => {
-    setNewTagName("");
-    setNewTagColor("#3B82F6");
-    setShowCreateTagModal(false);
-    setShowTagModal(true);
-  };
-
-  const handleIconSelect = (icon) => {
-    handleInputChange("icon", icon.name);
-    setShowIconModal(false);
   };
 
   const handleUnitSelect = (unit) => {
@@ -218,56 +174,57 @@ Remind: ${formData.remindTime || "Not set"}
     setShowUnitModal(false);
   };
 
-  // Repeat handlers
-  const handleRepeatToggle = (enabled) => {
-    handleRepeatChange("enabled", enabled);
-    if (!enabled) {
-      setShowRepeatSection(false);
-    }
-  };
-
   const handleRepeatTypeSelect = (type) => {
-    handleRepeatChange("type", type.type);
-    handleRepeatChange("days", []); // Reset days when type changes
+    handleInputChange("repetition_type", type.type);
+    handleInputChange("repetition_day_of_week", []); // Reset days when type changes
   };
 
   const handleWeekDayToggle = (day) => {
-    const currentDays = formData.repeat.days;
+    const currentDays = formData.repetition_day_of_week;
     const isSelected = currentDays.includes(day.id);
 
     if (isSelected) {
-      handleRepeatChange(
-        "days",
+      handleInputChange(
+        "repetition_day_of_week",
         currentDays.filter((d) => d !== day.id)
       );
     } else {
-      handleRepeatChange("days", [...currentDays, day.id]);
+      handleInputChange("repetition_day_of_week", [...currentDays, day.id]);
     }
   };
 
   const handleTimeSelect = () => {
     if (selectedHour && selectedMinute !== null) {
       const timeString = `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
-      handleInputChange("remindTime", timeString);
+      handleInputChange("reminder_time", timeString);
       setShowTimeModal(false);
     }
   };
 
   const getRepeatSummary = () => {
-    const { enabled, type, interval, days } = formData.repeat;
+    const { repetition_type, repetition_interval, repetition_day_of_week } = formData;
 
-    if (!enabled || !type) return "No repeat";
+    if (!repetition_type || repetition_type === 'none') return "Manual tracking";
 
-    let summary = `Every ${interval > 1 ? interval + " " : ""}${type}`;
+    let summary = `Every ${repetition_interval > 1 ? repetition_interval + " " : ""}${repetition_type}`;
 
-    if (type === "weekly" && days.length > 0) {
-      const dayNames = days
+    if (repetition_type === "weekly" && repetition_day_of_week.length > 0) {
+      const dayNames = repetition_day_of_week
         .map((dayId) => weekDays.find((d) => d.id === dayId)?.short)
         .filter(Boolean);
       summary += ` on ${dayNames.join(", ")}`;
     }
 
     return summary;
+  };
+
+  const getSelectedUnit = () => {
+    const unit = units.find(u => u.name === formData.unit);
+    return unit ? unit.label : "Times";
+  };
+
+  const getSelectedTags = () => {
+    return availableTags.filter(tag => formData.tags.includes(tag.id));
   };
 
   const renderScrollWheelItem = ({ item }, selectedValue, onPress) => {
@@ -299,6 +256,15 @@ Remind: ${formData.remindTime || "Not set"}
     </View>
   );
 
+  if (createHabitMutation.isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#1C30A4" />
+        <Text style={styles.loadingText}>Creating habit...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -313,7 +279,7 @@ Remind: ${formData.remindTime || "Not set"}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Habit Name */}
         {renderFormSection(
-          "Habit Name",
+          "Habit Name *",
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.textInput}
@@ -325,9 +291,9 @@ Remind: ${formData.remindTime || "Not set"}
           </View>
         )}
 
-        {/* Habit Tag */}
+        {/* Habit Tags */}
         {renderFormSection(
-          "Habit Tag",
+          "Habit Tags",
           <View style={styles.inputContainer}>
             <TouchableOpacity
               style={styles.dropdownButton}
@@ -338,55 +304,48 @@ Remind: ${formData.remindTime || "Not set"}
                 <Text
                   style={[
                     styles.dropdownText,
-                    !formData.tag && styles.placeholderText,
+                    getSelectedTags().length === 0 && styles.placeholderText,
                   ]}
                 >
-                  {formData.tag || "Select the Habit Tag"}
+                  {getSelectedTags().length > 0 
+                    ? `${getSelectedTags().length} tag(s) selected`
+                    : "Select Habit Tags"
+                  }
                 </Text>
               </View>
               <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
             </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Habit Icon */}
-        {renderFormSection(
-          "Habit Icon",
-          <View style={styles.inputContainer}>
-            <TouchableOpacity
-              style={styles.dropdownButton}
-              onPress={() => setShowIconModal(true)}
-            >
-              <View style={styles.dropdownContent}>
-                <Ionicons name="apps-outline" size={20} color="#6B7280" />
-                <Text
-                  style={[
-                    styles.dropdownText,
-                    !formData.icon && styles.placeholderText,
-                  ]}
-                >
-                  {formData.icon
-                    ? habitIcons.find((i) => i.name === formData.icon)?.label
-                    : "Select the Habit Icon"}
-                </Text>
+            {getSelectedTags().length > 0 && (
+              <View style={styles.selectedTagsContainer}>
+                {getSelectedTags().map((tag) => (
+                  <View key={tag.id} style={[styles.selectedTag, { borderColor: tag.color }]}>
+                    <View style={[styles.tagColorDot, { backgroundColor: tag.color }]} />
+                    <Text style={styles.selectedTagText}>{tag.name}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleTagSelect(tag)}
+                      style={styles.removeTagButton}
+                    >
+                      <Ionicons name="close" size={14} color="#6B7280" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
-              <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
-            </TouchableOpacity>
+            )}
           </View>
         )}
 
         {/* Repetition Count */}
         {renderFormSection(
-          "Repetition Count",
+          "Target Amount *",
           <View style={styles.repetitionContainer}>
             <View style={[styles.inputContainer, styles.repetitionInput]}>
               <TouchableOpacity style={styles.repetitionButton}>
                 <Ionicons name="repeat-outline" size={20} color="#6B7280" />
                 <TextInput
                   style={styles.repetitionTextInput}
-                  value={formData.repetitionCount}
+                  value={formData.repetition_count.toString()}
                   onChangeText={(value) =>
-                    handleInputChange("repetitionCount", value)
+                    handleInputChange("repetition_count", value)
                   }
                   keyboardType="numeric"
                 />
@@ -397,25 +356,25 @@ Remind: ${formData.remindTime || "Not set"}
                 style={styles.dropdownButton}
                 onPress={() => setShowUnitModal(true)}
               >
-                <Text style={styles.dropdownText}>{formData.unit}</Text>
+                <Text style={styles.dropdownText}>{getSelectedUnit()}</Text>
                 <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* Repeat Section - Enhanced UI like Create Task */}
+        {/* Repeat Section */}
         {showRepeatSection &&
           renderFormSection(
-            "Repeat Options",
+            "Repeat Schedule *",
             <View style={styles.repeatContainer}>
               <View style={styles.sectionHeaderWithRemove}>
-                <Text style={styles.inputLabel}>Recurring Schedule</Text>
+                <Text style={styles.inputLabel}>How often?</Text>
                 <TouchableOpacity
                   style={styles.removeSectionButton}
                   onPress={() => {
                     setShowRepeatSection(false);
-                    handleRepeatToggle(false);
+                    handleInputChange("repetition_type", "none");
                   }}
                 >
                   <Ionicons name="close" size={16} color="#6B7280" />
@@ -431,7 +390,7 @@ Remind: ${formData.remindTime || "Not set"}
                       key={type.id}
                       style={[
                         styles.repeatTypeButton,
-                        formData.repeat.type === type.type &&
+                        formData.repetition_type === type.type &&
                           styles.selectedRepeatType,
                       ]}
                       onPress={() => handleRepeatTypeSelect(type)}
@@ -440,7 +399,7 @@ Remind: ${formData.remindTime || "Not set"}
                         name={type.icon}
                         size={14}
                         color={
-                          formData.repeat.type === type.type
+                          formData.repetition_type === type.type
                             ? "#fff"
                             : "#1C30A4"
                         }
@@ -448,7 +407,7 @@ Remind: ${formData.remindTime || "Not set"}
                       <Text
                         style={[
                           styles.repeatTypeText,
-                          formData.repeat.type === type.type &&
+                          formData.repetition_type === type.type &&
                             styles.selectedRepeatTypeText,
                         ]}
                       >
@@ -460,33 +419,33 @@ Remind: ${formData.remindTime || "Not set"}
               </View>
 
               {/* Repeat Interval */}
-              {formData.repeat.type && formData.repeat.type !== "one-time" && (
+              {formData.repetition_type && formData.repetition_type !== "none" && (
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>
-                    Every {formData.repeat.interval} {formData.repeat.type}
-                    {formData.repeat.interval > 1 ? "s" : ""}
+                    Every {formData.repetition_interval} {formData.repetition_type}
+                    {formData.repetition_interval > 1 ? "s" : ""}
                   </Text>
                   <View style={styles.intervalContainer}>
                     <TouchableOpacity
                       style={styles.intervalButton}
                       onPress={() =>
-                        handleRepeatChange(
-                          "interval",
-                          Math.max(1, formData.repeat.interval - 1)
+                        handleInputChange(
+                          "repetition_interval",
+                          Math.max(1, formData.repetition_interval - 1)
                         )
                       }
                     >
                       <Ionicons name="remove" size={16} color="#1C30A4" />
                     </TouchableOpacity>
                     <Text style={styles.intervalText}>
-                      {formData.repeat.interval}
+                      {formData.repetition_interval}
                     </Text>
                     <TouchableOpacity
                       style={styles.intervalButton}
                       onPress={() =>
-                        handleRepeatChange(
-                          "interval",
-                          formData.repeat.interval + 1
+                        handleInputChange(
+                          "repetition_interval",
+                          formData.repetition_interval + 1
                         )
                       }
                     >
@@ -497,16 +456,16 @@ Remind: ${formData.remindTime || "Not set"}
               )}
 
               {/* Weekly Days Selection */}
-              {formData.repeat.type === "weekly" && (
+              {formData.repetition_type === "weekly" && (
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Repeat on</Text>
+                  <Text style={styles.inputLabel}>Repeat on *</Text>
                   <View style={styles.weekDaysContainer}>
                     {weekDays.map((day) => (
                       <TouchableOpacity
                         key={day.id}
                         style={[
                           styles.weekDayButton,
-                          formData.repeat.days.includes(day.id) &&
+                          formData.repetition_day_of_week.includes(day.id) &&
                             styles.selectedWeekDay,
                         ]}
                         onPress={() => handleWeekDayToggle(day)}
@@ -514,7 +473,7 @@ Remind: ${formData.remindTime || "Not set"}
                         <Text
                           style={[
                             styles.weekDayText,
-                            formData.repeat.days.includes(day.id) &&
+                            formData.repetition_day_of_week.includes(day.id) &&
                               styles.selectedWeekDayText,
                           ]}
                         >
@@ -543,15 +502,15 @@ Remind: ${formData.remindTime || "Not set"}
               style={styles.addSectionButton}
               onPress={() => {
                 setShowRepeatSection(true);
-                handleRepeatToggle(true);
+                handleInputChange("repetition_type", "daily");
               }}
             >
               <View style={styles.addSectionContent}>
                 <Ionicons name="repeat-outline" size={20} color="#1C30A4" />
                 <View style={styles.addSectionContentCol}>
-                  <Text style={styles.addSectionText}>Add Repeat Options</Text>
+                  <Text style={styles.addSectionText}>Add Repeat Schedule</Text>
                   <Text style={styles.addSectionSubtext}>
-                    Set recurring schedule
+                    Set when to track this habit
                   </Text>
                 </View>
               </View>
@@ -560,11 +519,11 @@ Remind: ${formData.remindTime || "Not set"}
           </View>
         )}
 
-        {/* Remind */}
+        {/* Reminder Time */}
         {renderFormSection(
-          "Remind",
+          "Reminder Time",
           <View>
-            <Text style={styles.sectionSubtitle}>Remind me at</Text>
+            <Text style={styles.sectionSubtitle}>Get notified to stay on track</Text>
             <View style={styles.inputContainer}>
               <TouchableOpacity
                 style={styles.dropdownButton}
@@ -575,10 +534,10 @@ Remind: ${formData.remindTime || "Not set"}
                   <Text
                     style={[
                       styles.dropdownText,
-                      !formData.remindTime && styles.placeholderText,
+                      !formData.reminder_time && styles.placeholderText,
                     ]}
                   >
-                    {formData.remindTime || "Select Time"}
+                    {formData.reminder_time || "Select Time"}
                   </Text>
                 </View>
                 <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
@@ -590,15 +549,28 @@ Remind: ${formData.remindTime || "Not set"}
         {/* Create Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={styles.createButton}
+            style={[
+              styles.createButton,
+              (!formData.name.trim() || 
+               (formData.repetition_type === 'weekly' && formData.repetition_day_of_week.length === 0)
+              ) && styles.disabledButton
+            ]}
             onPress={handleCreateHabit}
+            disabled={
+              !formData.name.trim() || 
+              (formData.repetition_type === 'weekly' && formData.repetition_day_of_week.length === 0) ||
+              createHabitMutation.isLoading
+            }
           >
-            <Text style={styles.createButtonText}>Create Habit</Text>
+            {createHabitMutation.isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.createButtonText}>Create Habit</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* All existing modals remain the same... */}
       {/* Tag Modal */}
       <Modal
         visible={showTagModal}
@@ -617,205 +589,59 @@ Remind: ${formData.remindTime || "Not set"}
             onPress={() => {}}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Habit Tag</Text>
+              <Text style={styles.modalTitle}>Select Habit Tags</Text>
+              <Text style={styles.modalSubtitle}>Choose tags to organize your habit</Text>
             </View>
 
             <ScrollView
               style={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
             >
-              {/* Add new tag option */}
-              <TouchableOpacity
-                style={styles.optionItem}
-                onPress={handleOpenCreateTag}
-                activeOpacity={0.7}
-              >
-                <View style={styles.optionContent}>
-                  <Ionicons
-                    name="add-circle-outline"
-                    size={20}
-                    color="#1C30A4"
-                    style={styles.optionIcon}
-                  />
-                  <Text style={styles.addNewOptionText}>Add a new Tag</Text>
+              {tagsLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#1C30A4" />
+                  <Text style={styles.loadingText}>Loading tags...</Text>
                 </View>
-              </TouchableOpacity>
-
-              {availableTags.map((tag, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.optionItem,
-                    formData.tag === tag.name && styles.selectedOptionItem,
-                  ]}
-                  onPress={() => handleTagSelect(tag)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.optionContent}>
-                    <View
-                      style={[
-                        styles.tagColorDot,
-                        { backgroundColor: tag.color },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.optionText,
-                        formData.tag === tag.name && styles.selectedOptionText,
-                      ]}
-                    >
-                      {tag.name}
-                    </Text>
-                  </View>
-                  {formData.tag === tag.name && (
-                    <Ionicons name="checkmark" size={20} color="#1C30A4" />
-                  )}
-                </TouchableOpacity>
-              ))}
+              ) : (
+                availableTags.map((tag) => (
+                  <TouchableOpacity
+                    key={tag.id}
+                    style={[
+                      styles.optionItem,
+                      formData.tags.includes(tag.id) && styles.selectedOptionItem,
+                    ]}
+                    onPress={() => handleTagSelect(tag)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.optionContent}>
+                      <View
+                        style={[
+                          styles.tagColorDot,
+                          { backgroundColor: tag.color },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          styles.optionText,
+                          formData.tags.includes(tag.id) && styles.selectedOptionText,
+                        ]}
+                      >
+                        {tag.name}
+                      </Text>
+                    </View>
+                    {formData.tags.includes(tag.id) && (
+                      <Ionicons name="checkmark" size={20} color="#1C30A4" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
 
             <TouchableOpacity
               style={styles.cancelModalButton}
               onPress={() => setShowTagModal(false)}
             >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Create New Tag Modal */}
-      <Modal
-        visible={showCreateTagModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowCreateTagModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCreateTagModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalContainer}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Tag</Text>
-              <Text style={styles.modalSubtitle}>Add a new Habit Tag</Text>
-            </View>
-
-            <View style={styles.createTagInputContainer}>
-              <Text style={styles.inputLabel}>Tag Name</Text>
-              <TextInput
-                style={styles.createTagTextInput}
-                placeholder="Enter tag name"
-                value={newTagName}
-                onChangeText={setNewTagName}
-                placeholderTextColor="#9CA3AF"
-              />
-            </View>
-
-            <View style={styles.createTagInputContainer}>
-              <Text style={styles.inputLabel}>Tag Color</Text>
-              <View style={styles.colorSelection}>
-                {tagColors.map((color, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.colorOption,
-                      { backgroundColor: color },
-                      newTagColor === color && styles.selectedColorOption,
-                    ]}
-                    onPress={() => setNewTagColor(color)}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={handleCancelCreateTag}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.confirmButton,
-                  !newTagName.trim() && styles.disabledButton,
-                ]}
-                onPress={handleCreateTag}
-                disabled={!newTagName.trim()}
-              >
-                <Text style={styles.confirmButtonText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Icon Modal */}
-      <Modal
-        visible={showIconModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowIconModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowIconModal(false)}
-        >
-          <TouchableOpacity
-            style={styles.modalContainer}
-            activeOpacity={1}
-            onPress={() => {}}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Habit Icon</Text>
-            </View>
-
-            <ScrollView
-              style={styles.modalScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.iconGrid}>
-                {habitIcons.map((icon) => (
-                  <TouchableOpacity
-                    key={icon.id}
-                    style={[
-                      styles.iconItem,
-                      formData.icon === icon.name && styles.selectedIconItem,
-                    ]}
-                    onPress={() => handleIconSelect(icon)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={icon.name}
-                      size={24}
-                      color={formData.icon === icon.name ? "#fff" : "#1C30A4"}
-                    />
-                    <Text
-                      style={[
-                        styles.iconItemText,
-                        formData.icon === icon.name &&
-                          styles.selectedIconItemText,
-                      ]}
-                    >
-                      {icon.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.cancelModalButton}
-              onPress={() => setShowIconModal(false)}
-            >
-              <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              <Text style={styles.cancelModalButtonText}>Done</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -862,7 +688,7 @@ Remind: ${formData.remindTime || "Not set"}
                       formData.unit === unit.name && styles.selectedOptionText,
                     ]}
                   >
-                    {unit.name}
+                    {unit.label}
                   </Text>
                   {formData.unit === unit.name && (
                     <Ionicons name="checkmark" size={20} color="#1C30A4" />
@@ -979,6 +805,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#6B7280",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1064,6 +899,30 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: "#9CA3AF",
   },
+  selectedTagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 12,
+    gap: 8,
+  },
+  selectedTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  selectedTagText: {
+    fontSize: 12,
+    color: "#374151",
+    marginLeft: 4,
+    marginRight: 4,
+  },
+  removeTagButton: {
+    padding: 2,
+  },
   repetitionContainer: {
     flexDirection: "row",
     gap: 12,
@@ -1089,7 +948,6 @@ const styles = StyleSheet.create({
     padding: 0,
     flex: 1,
   },
-  // Enhanced Repeat Section Styles (matching CreateTask)
   repeatContainer: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -1201,6 +1059,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    marginTop: 12,
   },
   repeatSummaryLabel: {
     fontSize: 12,
@@ -1213,7 +1072,6 @@ const styles = StyleSheet.create({
     color: "#1C30A4",
     fontWeight: "600",
   },
-  // Add Section Button (matching CreateTask)
   optionalSectionsContainer: {
     marginBottom: 16,
   },
@@ -1269,12 +1127,15 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  disabledButton: {
+    backgroundColor: "#D1D5DB",
+    shadowOpacity: 0.1,
+  },
   createButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: "#fff",
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -1302,6 +1163,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6B7280",
     marginTop: 5,
+    textAlign: "center",
   },
   modalScrollContent: {
     flexGrow: 0,
@@ -1326,9 +1188,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  optionIcon: {
-    marginRight: 12,
-  },
   optionText: {
     fontSize: 16,
     color: "#374151",
@@ -1338,39 +1197,14 @@ const styles = StyleSheet.create({
     color: "#1C30A4",
     fontWeight: "600",
   },
-  iconGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  iconItem: {
-    width: "30%",
-    aspectRatio: 1,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  selectedIconItem: {
-    backgroundColor: "#1C30A4",
-    borderColor: "#1C30A4",
-  },
-  iconItemText: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 4,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  selectedIconItemText: {
-    color: "#fff",
+  tagColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
   },
   cancelModalButton: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#1C30A4",
     borderRadius: 8,
     height: 44,
     justifyContent: "center",
@@ -1378,91 +1212,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cancelModalButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  // Modal Buttons
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 8,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-  cancelButtonText: {
-    color: "#6B7280",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  confirmButton: {
-    flex: 1,
-    backgroundColor: "#1C30A4",
-    borderRadius: 8,
-    height: 44,
-    justifyContent: "center",
-    alignItems: "center",
-    marginLeft: 10,
-  },
-  confirmButtonText: {
     color: "#fff",
     fontSize: 16,
-    fontWeight: "600",
-  },
-  disabledButton: {
-    backgroundColor: "#D1D5DB",
-  },
-  addNewOptionText: {
-    fontSize: 16,
-    color: "#1C30A4",
     fontWeight: "500",
   },
-  createTagInputContainer: {
-    marginBottom: 20,
-    gap: 12,
-  },
-  createTagTextInput: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: "#374151",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  tagColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  colorSelection: {
-    flexDirection: "row",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  colorOption: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  selectedColorOption: {
-    borderColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  // Time Modal Styles
   timeModalContainer: {
     backgroundColor: "#fff",
     borderRadius: 20,

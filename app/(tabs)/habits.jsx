@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   FlatList,
   SafeAreaView,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useNavigation } from "expo-router";
@@ -16,15 +19,19 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  interpolate,
-  runOnJS,
 } from "react-native-reanimated";
+import { 
+  useHabitsForDate, 
+  useHabitStats,
+  useMarkHabitDone,
+  useMarkHabitSkipped,
+  useUndoHabitAction 
+} from "../hooks/useHabitsQueries";
 
 const Habits = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
-  const [animationDirection, setAnimationDirection] = useState("next");
   const [isCalendarExpanded, setIsCalendarExpanded] = useState(false);
 
   // Animation values
@@ -33,168 +40,133 @@ const Habits = () => {
   const calendarHeight = useSharedValue(0);
   const calendarOpacity = useSharedValue(0);
   const expandIconRotation = useSharedValue(0);
-  const miniCalendarMargin = useSharedValue(0); // New animation value for margin
+  const miniCalendarMargin = useSharedValue(0);
 
   const navigation = useNavigation();
 
-  // Mock habits data with date-specific completion status
-  const habitsData = [
-    {
-      id: 1,
-      name: "Teeth care",
-      description: "Maintain good oral hygiene routine",
-      category: "Health",
-      icon: "medical-outline",
-      color: "#3B82F6",
+    // Helper functions
+  const getHabitIcon = (name, tags) => {
+    const nameUpper = name.toUpperCase();
+    if (nameUpper.includes('EXERCISE') || nameUpper.includes('GYM') || nameUpper.includes('WORKOUT')) return 'fitness-outline';
+    if (nameUpper.includes('READ') || nameUpper.includes('BOOK')) return 'book-outline';
+    if (nameUpper.includes('WATER') || nameUpper.includes('DRINK')) return 'water-outline';
+    if (nameUpper.includes('SLEEP') || nameUpper.includes('PRAYER') || nameUpper.includes('QIYAM')) return 'moon-outline';
+    if (nameUpper.includes('TEETH') || nameUpper.includes('BRUSH')) return 'medical-outline';
+    if (nameUpper.includes('WALK') || nameUpper.includes('STEP')) return 'walk-outline';
+    if (nameUpper.includes('MEDITAT')) return 'flower-outline';
+    return 'flower-outline';
+  };
+
+  // Format date for API
+  const formatDateForAPI = (date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const selectedDateString = formatDateForAPI(selectedDate);
+
+  // API hooks
+  const { 
+    data: habitsData, 
+    isLoading: habitsLoading, 
+    isError: habitsError,
+    refetch: refetchHabits 
+  } = useHabitsForDate(selectedDateString);
+
+  const { 
+    data: statsData, 
+    isLoading: statsLoading 
+  } = useHabitStats('week');
+
+  // Mutations
+  const markDoneMutation = useMarkHabitDone();
+  const markSkippedMutation = useMarkHabitSkipped();
+  const undoActionMutation = useUndoHabitAction();
+
+  // Process habits data
+  const habits = useMemo(() => {
+    if (!habitsData?.data) return [];
+    
+    const { active_habits = [], completed_habits = [] } = habitsData.data;
+    return [...active_habits, ...completed_habits].map(habit => ({
+      id: habit.id,
+      name: habit.name,
+      completed: habit.status === 'completed',
+      current: habit.completed_count || 0,
+      target: habit.repetition_count || 1,
+      unit: habit.unit || 'times',
+      status: habit.status || 'pending',
+      skipped: habit.skipped || false,
+      progress_percentage: habit.progress_percentage || 0,
+      tags: habit.tags || [],
+      category: habit.tags?.[0]?.name || 'General',
+      color: habit.tags?.[0]?.color || '#3B82F6',
+      icon: getHabitIcon(habit.name, habit.tags),
+      description: `Complete ${habit.repetition_count} ${habit.unit} daily`,
       schedule: "Daily",
-      tags: ["Health", "Morning"],
-      target: 2,
-      unit: "times",
-      completionData: {
-        "2025-01-08": { completed: 1, total: 2, isCompleted: false },
-        "2025-01-07": { completed: 2, total: 2, isCompleted: true },
-        "2025-01-06": { completed: 2, total: 2, isCompleted: true },
-        "2025-01-05": { completed: 1, total: 2, isCompleted: false },
-        "2025-01-09": { completed: 0, total: 2, isCompleted: false },
-        "2025-01-10": { completed: 0, total: 2, isCompleted: false },
-        "2025-01-11": { completed: 0, total: 2, isCompleted: false },
-      },
-    },
-    {
-      id: 2,
-      name: "Qiyam Prayer",
-      description: "Night prayer for spiritual growth",
-      category: "Spiritual",
-      icon: "moon-outline",
-      color: "#8B5CF6",
-      schedule: "Daily",
-      tags: ["Prayer", "Night"],
-      target: 1,
-      unit: "times",
-      completionData: {
-        "2025-01-08": { completed: 0, total: 1, isCompleted: false },
-        "2025-01-07": { completed: 1, total: 1, isCompleted: true },
-        "2025-01-06": { completed: 0, total: 1, isCompleted: false },
-        "2025-01-05": { completed: 1, total: 1, isCompleted: true },
-        "2025-01-09": { completed: 0, total: 1, isCompleted: false },
-        "2025-01-10": { completed: 0, total: 1, isCompleted: false },
-        "2025-01-11": { completed: 0, total: 1, isCompleted: false },
-      },
-    },
-    {
-      id: 3,
-      name: "Read my Book",
-      description: "Daily reading for personal development",
-      category: "Learning",
-      icon: "book-outline",
-      color: "#10B981",
-      schedule: "Daily",
-      tags: ["Reading", "Learning"],
-      target: 20,
-      unit: "pages",
-      completionData: {
-        "2025-01-08": { completed: 0, total: 20, isCompleted: false },
-        "2025-01-07": { completed: 20, total: 20, isCompleted: true },
-        "2025-01-06": { completed: 15, total: 20, isCompleted: false },
-        "2025-01-05": { completed: 20, total: 20, isCompleted: true },
-        "2025-01-09": { completed: 0, total: 20, isCompleted: false },
-        "2025-01-10": { completed: 0, total: 20, isCompleted: false },
-        "2025-01-11": { completed: 0, total: 20, isCompleted: false },
-      },
-    },
-    {
-      id: 4,
-      name: "Morning Exercise",
-      description: "Physical fitness and health routine",
-      category: "Fitness",
-      icon: "fitness-outline",
-      color: "#F59E0B",
-      schedule: "Daily",
-      tags: ["Exercise", "Morning"],
-      target: 30,
-      unit: "minutes",
-      completionData: {
-        "2025-01-08": { completed: 30, total: 30, isCompleted: true },
-        "2025-01-07": { completed: 30, total: 30, isCompleted: true },
-        "2025-01-06": { completed: 0, total: 30, isCompleted: false },
-        "2025-01-05": { completed: 30, total: 30, isCompleted: true },
-        "2025-01-09": { completed: 0, total: 30, isCompleted: false },
-        "2025-01-10": { completed: 0, total: 30, isCompleted: false },
-        "2025-01-11": { completed: 0, total: 30, isCompleted: false },
-      },
-    },
-  ];
+      streak: 0, // This would come from habit details API
+    }));
+  }, [habitsData]);
+
+  const getScheduleText = (habit) => {
+    // This would be based on habit repetition data
+    return 'Daily'; // Simplified for now
+  };
+
+  // Filter habits
+  const filteredHabits = useMemo(() => {
+    return habits.filter((habit) => {
+      const matchesSearch =
+        habit.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        habit.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        habit.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        habit.tags.some((tag) =>
+          tag.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+      const matchesFilter =
+        selectedFilter === "All" ||
+        (selectedFilter === "completed" && habit.completed) ||
+        (selectedFilter === "active" && !habit.completed);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [habits, searchQuery, selectedFilter]);
+
+  const completedHabits = habits.filter((habit) => habit.completed);
+  const activeHabits = habits.filter((habit) => !habit.completed);
 
   // Calendar functions
   const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
   ];
 
   const today = new Date();
   const isToday = (date) => date.toDateString() === today.toDateString();
-  const isSameDay = (date1, date2) =>
-    date1.toDateString() === date2.toDateString();
+  const isSameDay = (date1, date2) => date1.toDateString() === date2.toDateString();
 
-  // New function to toggle calendar expansion
   const toggleCalendarExpansion = () => {
     const newExpanded = !isCalendarExpanded;
     setIsCalendarExpanded(newExpanded);
 
     if (newExpanded) {
-      // Expand animation
-      calendarHeight.value = withSpring(80, {
-        damping: 15,
-        stiffness: 150,
-        mass: 1,
-      });
+      calendarHeight.value = withSpring(80, { damping: 15, stiffness: 150, mass: 1 });
       calendarOpacity.value = withTiming(1, { duration: 300 });
-      expandIconRotation.value = withSpring(180, {
-        damping: 15,
-        stiffness: 150,
-      });
-      miniCalendarMargin.value = withSpring(20, {
-        damping: 15,
-        stiffness: 150,
-      });
+      expandIconRotation.value = withSpring(180, { damping: 15, stiffness: 150 });
+      miniCalendarMargin.value = withSpring(20, { damping: 15, stiffness: 150 });
     } else {
-      // Collapse animation
-      calendarHeight.value = withSpring(0, {
-        damping: 15,
-        stiffness: 150,
-        mass: 1,
-      });
+      calendarHeight.value = withSpring(0, { damping: 15, stiffness: 150, mass: 1 });
       calendarOpacity.value = withTiming(0, { duration: 200 });
-      expandIconRotation.value = withSpring(0, {
-        damping: 15,
-        stiffness: 150,
-      });
-      miniCalendarMargin.value = withSpring(0, {
-        damping: 15,
-        stiffness: 150,
-      });
+      expandIconRotation.value = withSpring(0, { damping: 15, stiffness: 150 });
+      miniCalendarMargin.value = withSpring(0, { damping: 15, stiffness: 150 });
     }
   };
 
   const navigateDay = (direction) => {
-    setAnimationDirection(direction);
-
-    // Start animation
     const targetX = direction === "next" ? -50 : 50;
     dateSlideX.value = withTiming(targetX, { duration: 150 });
     dateOpacity.value = withTiming(0, { duration: 150 });
 
-    // Update date after animation starts
     setTimeout(() => {
       const newDate = new Date(selectedDate);
       if (direction === "next") {
@@ -204,7 +176,6 @@ const Habits = () => {
       }
       setSelectedDate(newDate);
 
-      // Animate back to center
       const startX = direction === "next" ? 50 : -50;
       dateSlideX.value = startX;
       dateSlideX.value = withTiming(0, { duration: 150 });
@@ -219,15 +190,7 @@ const Habits = () => {
   };
 
   const formatDate = (date) => {
-    const dayNames = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
-    ];
+    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     return {
       dayName: dayNames[date.getDay()],
       day: date.getDate(),
@@ -236,48 +199,27 @@ const Habits = () => {
     };
   };
 
-  // Get habits data for selected date
-  const getHabitsForDate = (date) => {
-    const dateKey = date.toISOString().split("T")[0];
-    return habitsData.map((habit) => {
-      const dayData = habit.completionData[dateKey] || {
-        completed: 0,
-        total: habit.target,
-        isCompleted: false,
-      };
-      return {
-        ...habit,
-        current: dayData.completed,
-        completed: dayData.isCompleted,
-        progress: {
-          completed: dayData.completed,
-          total: dayData.total,
-        },
-        streak: Math.floor(Math.random() * 15) + 1,
-      };
-    });
-  };
-
-  const habits = getHabitsForDate(selectedDate);
-  const completedHabits = habits.filter((habit) => habit.completed);
-  const activeHabits = habits.filter((habit) => !habit.completed);
-
-  // Generate week days for calendar dynamically
   const getWeekDays = () => {
     const days = [];
     const today = new Date();
+    const todayDateString = today.toDateString();
 
     for (let i = -3; i <= 3; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
+      
+      // Create comparison dates without time components
+      const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      
       days.push({
         date: date,
         day: date.getDate(),
         dayName: date.toLocaleDateString("en", { weekday: "short" }),
-        isToday: date.toDateString() === today.toDateString(),
+        isToday: date.toDateString() === todayDateString,
         isSelected: date.toDateString() === selectedDate.toDateString(),
-        isPast: date < today.setHours(0, 0, 0, 0),
-        isFuture: date > new Date().setHours(23, 59, 59, 999),
+        isPast: dateOnly < todayOnly,
+        isFuture: dateOnly > todayOnly,
       });
     }
     return days;
@@ -285,23 +227,26 @@ const Habits = () => {
 
   const weekDays = getWeekDays();
 
-  // Filter habits based on search and selected filter
-  const filteredHabits = habits.filter((habit) => {
-    const matchesSearch =
-      habit.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      habit.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      habit.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      habit.tags.some((tag) =>
-        tag.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-
-    const matchesFilter =
-      selectedFilter === "All" ||
-      (selectedFilter === "completed" && habit.completed) ||
-      (selectedFilter === "active" && !habit.completed);
-
-    return matchesSearch && matchesFilter;
-  });
+  // Habit actions
+  const handleHabitAction = async (habit, action) => {
+    try {
+      const data = { date: selectedDateString };
+      
+      switch (action) {
+        case 'done':
+          await markDoneMutation.mutateAsync({ habitId: habit.id, data });
+          break;
+        case 'skip':
+          await markSkippedMutation.mutateAsync({ habitId: habit.id, data });
+          break;
+        case 'undo':
+          await undoActionMutation.mutateAsync({ habitId: habit.id, data });
+          break;
+      }
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to update habit');
+    }
+  };
 
   const handleFilterPress = (filter) => {
     setSelectedFilter(filter);
@@ -315,85 +260,30 @@ const Habits = () => {
     router.push(`/HabitDetails?habitId=${habit.id}`);
   };
 
-  const handleDateSelect = (date) => {
+  const handleDateSelect = (date) => {   
     setSelectedDate(date);
     setSearchQuery("");
     setSelectedFilter("All");
   };
 
   // Animated styles
-  const animatedDateStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateX: dateSlideX.value }],
-      opacity: dateOpacity.value,
-    };
-  });
+  const animatedDateStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dateSlideX.value }],
+    opacity: dateOpacity.value,
+  }));
 
-  // New animated styles for calendar expansion
-  const animatedCalendarStyle = useAnimatedStyle(() => {
-    return {
-      height: calendarHeight.value,
-      opacity: calendarOpacity.value,
-    };
-  });
+  const animatedCalendarStyle = useAnimatedStyle(() => ({
+    height: calendarHeight.value,
+    opacity: calendarOpacity.value,
+  }));
 
-  const animatedExpandIconStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ rotate: `${expandIconRotation.value}deg` }],
-    };
-  });
+  const animatedExpandIconStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${expandIconRotation.value}deg` }],
+  }));
 
-  // New animated style for mini calendar margin
-  const animatedMiniCalendarStyle = useAnimatedStyle(() => {
-    return {
-      marginTop: miniCalendarMargin.value,
-    };
-  });
-
-  const renderCalendarDay = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.dayContainer,
-        item.isToday && styles.todayContainer,
-        item.isSelected && styles.selectedDayContainer,
-        item.isPast && styles.pastDayContainer,
-      ]}
-      onPress={() => handleDateSelect(item.date)}
-    >
-      <Text
-        style={[
-          styles.dayName,
-          (item.isToday || item.isSelected) && styles.activeDayName,
-          item.isPast && styles.pastDayName,
-        ]}
-      >
-        {item.dayName}
-      </Text>
-      <Text
-        style={[
-          styles.dayNumber,
-          (item.isToday || item.isSelected) && styles.activeDayNumber,
-          item.isPast && styles.pastDayNumber,
-        ]}
-      >
-        {item.day}
-      </Text>
-      <View style={styles.dayIndicator}>
-        <View
-          style={[
-            styles.dayIndicatorDot,
-            {
-              backgroundColor:
-                getHabitsForDate(item.date).filter((h) => h.completed).length >
-                0
-                  ? "#10B981"
-                  : "transparent",
-            },
-          ]}
-        />
-      </View>
-    </TouchableOpacity>
-  );
+  const animatedMiniCalendarStyle = useAnimatedStyle(() => ({
+    marginTop: miniCalendarMargin.value,
+  }));
 
   const renderHabitCard = ({ item }) => (
     <TouchableOpacity
@@ -435,12 +325,43 @@ const Habits = () => {
         <View style={styles.habitHeaderRight}>
           <View style={styles.habitProgress}>
             <Text style={[styles.progressText, { color: item.color }]}>
-              {item.progress.completed}/{item.progress.total}
+              {item.current}/{item.target}
             </Text>
-            <Text style={styles.progressLabel}>times</Text>
+            <Text style={styles.progressLabel}>{item.unit}</Text>
           </View>
-          <TouchableOpacity style={styles.habitMenuButton}>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#6B7280" />
+          
+          {/* Action Button */}
+          <TouchableOpacity
+            style={styles.habitActionButton}
+            onPress={() => {
+              if (item.completed) {
+                handleHabitAction(item, 'undo');
+              } else if (item.skipped) {
+                handleHabitAction(item, 'undo');
+              } else {
+                // Show action menu
+                Alert.alert(
+                  'Update Habit',
+                  'What would you like to do?',
+                  [
+                    { text: 'Mark Done', onPress: () => handleHabitAction(item, 'done') },
+                    { text: 'Skip Today', onPress: () => handleHabitAction(item, 'skip') },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]
+                );
+              }
+            }}
+            disabled={markDoneMutation.isLoading || markSkippedMutation.isLoading || undoActionMutation.isLoading}
+          >
+            {(markDoneMutation.isLoading || markSkippedMutation.isLoading || undoActionMutation.isLoading) ? (
+              <ActivityIndicator size="small" color="#6B7280" />
+            ) : (
+              <Ionicons 
+                name={item.completed ? "checkmark-circle" : item.skipped ? "close-circle" : "ellipsis-horizontal"} 
+                size={18} 
+                color={item.completed ? "#10B981" : item.skipped ? "#EF4444" : "#6B7280"} 
+              />
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -466,24 +387,30 @@ const Habits = () => {
         </View>
       </View>
 
-      <View style={styles.habitTags}>
-        {item.tags.slice(0, 3).map((tag, index) => (
-          <View key={index} style={styles.habitTag}>
-            <Text style={styles.habitTagText}>{tag}</Text>
-          </View>
-        ))}
-        {item.tags.length > 3 && (
-          <View style={styles.habitTag}>
-            <Text style={styles.habitTagText}>+{item.tags.length - 3}</Text>
-          </View>
-        )}
-      </View>
+      {item.tags.length > 0 && (
+        <View style={styles.habitTags}>
+          {item.tags.slice(0, 3).map((tag, index) => (
+            <View key={index} style={[styles.habitTag, { borderColor: tag.color }]}>
+              <View style={[styles.tagColorDot, { backgroundColor: tag.color }]} />
+              <Text style={styles.habitTagText}>{tag.name}</Text>
+            </View>
+          ))}
+          {item.tags.length > 3 && (
+            <View style={styles.habitTag}>
+              <Text style={styles.habitTagText}>+{item.tags.length - 3}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       <View style={styles.habitProgressBar}>
         <View style={styles.habitProgressInfo}>
           <Text style={styles.habitProgressText}>
             Progress: {Math.round(getHabitProgress(item))}%
           </Text>
+          {item.skipped && (
+            <Text style={styles.skippedText}>Skipped today</Text>
+          )}
         </View>
         <View style={styles.habitProgressBarContainer}>
           <View style={styles.habitProgressBackground}>
@@ -492,7 +419,7 @@ const Habits = () => {
                 styles.habitProgressFill,
                 {
                   width: `${getHabitProgress(item)}%`,
-                  backgroundColor: item.color,
+                  backgroundColor: item.skipped ? "#EF4444" : item.color,
                 },
               ]}
             />
@@ -500,7 +427,7 @@ const Habits = () => {
         </View>
       </View>
 
-      {!item.completed && (
+      {!item.completed && !item.skipped && (
         <View style={styles.habitFooter}>
           <View style={styles.habitFooterLeft}>
             <View
@@ -529,6 +456,28 @@ const Habits = () => {
 
   const dateInfo = formatDate(selectedDate);
 
+  if (habitsLoading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#1C30A4" />
+        <Text style={styles.loadingText}>Loading your habits...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (habitsError) {
+    return (
+      <SafeAreaView style={[styles.container, styles.errorContainer]}>
+        <Ionicons name="alert-circle-outline" size={64} color="#EF4444" />
+        <Text style={styles.errorTitle}>Failed to load habits</Text>
+        <Text style={styles.errorText}>Please check your connection and try again</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refetchHabits}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -544,7 +493,7 @@ const Habits = () => {
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity
-            onPress={() => navigation.navigate("CreateHabit/index")}
+            onPress={() => router.push("/CreateHabit")}
             style={styles.addButton}
           >
             <Ionicons name="add" size={20} color="#fff" />
@@ -556,7 +505,6 @@ const Habits = () => {
       {/* Expandable Calendar Section */}
       <View style={styles.dynamicCalendarSection}>
         <View style={styles.dynamicCalendarContainer}>
-          {/* Always visible header */}
           <View style={styles.dynamicCalendarHeader}>
             <Text style={styles.dynamicCalendarTitle}>Today's Habits</Text>
             <View style={styles.headerButtonsContainer}>
@@ -578,11 +526,9 @@ const Habits = () => {
             </View>
           </View>
 
-          {/* Expandable content */}
           <Animated.View
             style={[styles.expandableContent, animatedCalendarStyle]}
           >
-            {/* Date Navigation */}
             <View style={styles.dateNavigationContainer}>
               <TouchableOpacity
                 onPress={() => navigateDay("prev")}
@@ -612,7 +558,6 @@ const Habits = () => {
             </View>
           </Animated.View>
 
-          {/* Always visible Mini Week Calendar with animated margin */}
           <Animated.View
             style={[styles.miniCalendarContainer, animatedMiniCalendarStyle]}
           >
@@ -653,8 +598,9 @@ const Habits = () => {
                   >
                     {item.day}
                   </Text>
-                  {getHabitsForDate(item.date).filter((h) => h.completed)
-                    .length > 0 && <View style={styles.miniDayIndicator} />}
+                  {item.isSelected && habits.filter((h) => h.completed).length > 0 && (
+                    <View style={styles.miniDayIndicator} />
+                  )}
                 </TouchableOpacity>
               )}
               horizontal
@@ -709,12 +655,11 @@ const Habits = () => {
               <Text style={styles.progressCardTitle}>All Habits</Text>
             </View>
             <Text style={styles.progressCardNumber}>
-              {Math.round(
+              {habits.length > 0 ? Math.round(
                 habits.reduce((acc, habit) => {
                   return acc + getHabitProgress(habit);
                 }, 0) / habits.length
-              )}
-              %
+              ) : 0}%
             </Text>
             <View style={styles.progressCardBar}>
               <View style={styles.progressCardBackground}>
@@ -722,11 +667,11 @@ const Habits = () => {
                   style={[
                     styles.progressCardFill,
                     {
-                      width: `${Math.round(
+                      width: `${habits.length > 0 ? Math.round(
                         habits.reduce((acc, habit) => {
                           return acc + getHabitProgress(habit);
                         }, 0) / habits.length
-                      )}%`,
+                      ) : 0}%`,
                     },
                   ]}
                 />
@@ -769,7 +714,7 @@ const Habits = () => {
                   style={[
                     styles.statCardProgressFill,
                     {
-                      width: `${(activeHabits.length / habits.length) * 100}%`,
+                      width: habits.length > 0 ? `${(activeHabits.length / habits.length) * 100}%` : '0%',
                       backgroundColor: "#3B82F6",
                     },
                   ]}
@@ -812,9 +757,7 @@ const Habits = () => {
                   style={[
                     styles.statCardProgressFill,
                     {
-                      width: `${
-                        (completedHabits.length / habits.length) * 100
-                      }%`,
+                      width: habits.length > 0 ? `${(completedHabits.length / habits.length) * 100}%` : '0%',
                       backgroundColor: "#10B981",
                     },
                   ]}
@@ -832,13 +775,37 @@ const Habits = () => {
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.habitsList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={habitsLoading}
+            onRefresh={refetchHabits}
+            colors={["#1C30A4"]}
+            tintColor="#1C30A4"
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-done-outline" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyStateTitle}>No habits found</Text>
-            <Text style={styles.emptyStateText}>
-              Try adjusting your search or filter criteria
+            <Text style={styles.emptyStateTitle}>
+              {searchQuery || selectedFilter !== "All" 
+                ? "No habits found" 
+                : "No habits for this date"
+              }
             </Text>
+            <Text style={styles.emptyStateText}>
+              {searchQuery || selectedFilter !== "All"
+                ? "Try adjusting your search or filter criteria"
+                : "Create your first habit to get started"
+              }
+            </Text>
+            {!searchQuery && selectedFilter === "All" && (
+              <TouchableOpacity
+                style={styles.createHabitButton}
+                onPress={() => router.push("/CreateHabit")}
+              >
+                <Text style={styles.createHabitButtonText}>Create Your First Habit</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -850,6 +817,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#6B7280",
+  },
+  errorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#374151",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: "#1C30A4",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   header: {
     flexDirection: "row",
@@ -918,8 +923,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
   },
-
-  // NEW EXPANDABLE CALENDAR STYLES
   dynamicCalendarSection: {
     paddingHorizontal: 20,
     marginTop: 10,
@@ -1011,53 +1014,7 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     marginBottom: 8,
   },
-  todayBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  todayDot: {
-    width: 6,
-    height: 6,
-    backgroundColor: "#fff",
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  todayBadgeText: {
-    fontSize: 12,
-    color: "#fff",
-    fontWeight: "500",
-  },
-  todayButtonExpanded: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  todayButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1E293B",
-    marginLeft: 6,
-  },
-  miniCalendarContainer: {
-    // Remove marginTop from here since it's now animated
-  },
+  miniCalendarContainer: {},
   miniCalendarContent: {
     justifyContent: "space-between",
     paddingHorizontal: 4,
@@ -1112,30 +1069,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#10B981",
     borderRadius: 2,
     marginTop: 2,
-  },
-
-  // ORIGINAL STYLES CONTINUE
-  todaySection: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 16,
-  },
-  calendarContainer: {
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  calendarContent: {
-    justifyContent: "space-between",
   },
   dayContainer: {
     alignItems: "center",
@@ -1471,8 +1404,9 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 1,
   },
-  habitMenuButton: {
+  habitActionButton: {
     padding: 6,
+    borderRadius: 6,
   },
   habitDescription: {
     fontSize: 14,
@@ -1505,7 +1439,11 @@ const styles = StyleSheet.create({
     marginLeft: 52,
   },
   habitTag: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -1516,6 +1454,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#64748B",
     fontWeight: "500",
+    marginLeft: 4,
+  },
+  tagColorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   habitProgressBar: {
     marginBottom: 16,
@@ -1530,6 +1474,11 @@ const styles = StyleSheet.create({
   habitProgressText: {
     fontSize: 12,
     color: "#6B7280",
+  },
+  skippedText: {
+    fontSize: 12,
+    color: "#EF4444",
+    fontStyle: "italic",
   },
   habitProgressBarContainer: {},
   habitProgressBackground: {
@@ -1594,6 +1543,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#9CA3AF",
     textAlign: "center",
+    marginBottom: 20,
+  },
+  createHabitButton: {
+    backgroundColor: "#1C30A4",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  createHabitButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 
