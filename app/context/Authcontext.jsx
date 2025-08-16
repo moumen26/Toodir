@@ -63,7 +63,7 @@ const AuthReducer = (state, action) => {
 export const AuthContextProvider = ({ children }) => {
   const [state, dispatch] = useReducer(AuthReducer, initialState);
   const navigation = useNavigation();
-  const queryClient = useQueryClient(); // Access QueryClient instance
+  const queryClient = useQueryClient();
   
   // Token validation helper
   const isTokenValid = (token) => {
@@ -111,14 +111,42 @@ export const AuthContextProvider = ({ children }) => {
     try {
       // Clear all queries and mutations from the cache
       queryClient.clear();
-      
-      // Alternatively, you can be more specific and remove certain query keys:
-      // queryClient.removeQueries(); // Removes all queries
-      // queryClient.resetQueries(); // Resets all queries to initial state
-      
       console.log('React Query cache cleared successfully');
     } catch (error) {
       console.log('Error clearing React Query cache:', error);
+    }
+  };
+
+  // Safe navigation helper
+  const safeNavigate = (route) => {
+    try {
+      // Check if we can navigate
+      if (router.canDismiss?.()) {
+        router.dismissAll();
+      }
+      router.replace(route);
+    } catch (navigationError) {
+      console.log('Navigation error:', navigationError);
+      // Fallback navigation attempt
+      try {
+        router.replace(route);
+      } catch (fallbackError) {
+        console.log('Fallback navigation failed:', fallbackError);
+      }
+    }
+  };
+
+  // Device registration function
+  const deviceRegistration = async (tokenData) => {
+    try {
+      console.log('Registering device with token data:', tokenData);
+      const response = await authService.deviceRegistration(tokenData);
+      console.log('Device registration response:', response);
+      return response;
+    } catch (error) {
+      console.log('Device registration error:', error);
+      // Don't throw the error to avoid breaking the app initialization
+      return { success: false, error: error.message || 'Device registration failed' };
     }
   };
 
@@ -152,7 +180,7 @@ export const AuthContextProvider = ({ children }) => {
         });
 
         // Navigate to main app
-        router.replace("/(tabs)/home");
+        safeNavigate("/(tabs)/home");
 
         return { success: true };
       }
@@ -202,9 +230,8 @@ export const AuthContextProvider = ({ children }) => {
       // Dispatch logout action to update state
       dispatch({ type: "LOGOUT" });
       
-      // Navigate to login screen
-      router.dismissAll();
-      router.replace("/SignIn");
+      // Navigate to login screen safely
+      safeNavigate("/SignIn");
       
       console.log('Logout completed successfully');
     } catch (error) {
@@ -219,8 +246,7 @@ export const AuthContextProvider = ({ children }) => {
       }
       
       dispatch({ type: "LOGOUT" });
-      router.dismissAll();
-      router.replace("/SignIn");
+      safeNavigate("/SignIn");
     }
   };
 
@@ -262,15 +288,13 @@ export const AuthContextProvider = ({ children }) => {
       // Update state
       dispatch({ type: "LOGOUT" });
       
-      // Navigate to login
-      router.dismissAll();
-      router.replace("/SignIn");
+      // Navigate to login safely
+      safeNavigate("/SignIn");
     } catch (error) {
       console.log("Error during force logout:", error);
       // Ensure we still logout even if cleanup fails
       dispatch({ type: "LOGOUT" });
-      router.dismissAll();
-      router.replace("/SignIn");
+      safeNavigate("/SignIn");
     }
   };
 
@@ -309,7 +333,7 @@ export const AuthContextProvider = ({ children }) => {
             payload: { user, token } 
           });
           
-          router.replace("/(tabs)/home");
+          safeNavigate("/(tabs)/home");
         } else {
           // Token expired, clear everything and redirect
           await forceLogout('Token expired');
@@ -328,11 +352,12 @@ export const AuthContextProvider = ({ children }) => {
     login,
     register,
     logout,
-    forceLogout, // Export force logout for use in error interceptors
+    forceLogout,
     refreshToken,
+    deviceRegistration,
     clearError: () => dispatch({ type: "CLEAR_ERROR" }),
     updateUser: (userData) => dispatch({ type: "UPDATE_USER", payload: userData }),
-    clearQueryCache, // Export cache clearing function
+    clearQueryCache,
   };
 
   return (

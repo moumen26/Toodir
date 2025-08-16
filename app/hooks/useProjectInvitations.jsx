@@ -49,7 +49,7 @@ export const useRespondToProjectInvitation = () => {
       }
     },
     onError: (error) => {
-      console.error('Respond to project invitation error:', error);
+      console.log('Respond to project invitation error:', error);
     },
   });
 };
@@ -66,7 +66,7 @@ export const useCancelProjectInvitation = () => {
       queryClient.invalidateQueries({ queryKey: projectInvitationKeys.all });
     },
     onError: (error) => {
-      console.error('Cancel project invitation error:', error);
+      console.log('Cancel project invitation error:', error);
     },
   });
 };

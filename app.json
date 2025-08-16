@@ -38,7 +38,11 @@
     },
     "extra": {
       "apiUrl": "http://192.168.43.153:8000/api",
-      "filesUrl": "http://192.168.43.153:8000"
+      "filesUrl": "http://192.168.43.153:8000",
+      "router": {},
+      "eas": {
+        "projectId": "f4aa15d2-37bb-448f-9de4-8420f8fdb313"
+      }
     }
   }
 }

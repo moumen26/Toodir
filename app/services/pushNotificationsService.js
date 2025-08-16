@@ -41,10 +41,9 @@ export async function registerForPushNotifications() {
     });
     
     token = expoPushToken.data;
-    console.log('Expo push token:', token);
     
   } catch (error) {
-    console.error('Error getting push token:', error);
+    console.log('Error getting push token:', error);
     return null;
   }
 
@@ -61,7 +60,7 @@ export async function registerForPushNotifications() {
         enableLights: true,
       });
     } catch (error) {
-      console.error('Error setting notification channel:', error);
+      console.log('Error setting notification channel:', error);
     }
   }
 
@@ -72,7 +71,6 @@ export async function registerForPushNotifications() {
 export function setupNotificationHandlers(router) {
   // Handle notifications received while app is foregrounded
   const receivedListener = Notifications.addNotificationReceivedListener(notification => {
-    console.log('Notification received:', notification);
     
     // Reset badge count when notification is received
     Notifications.setBadgeCountAsync(0);
@@ -83,9 +81,7 @@ export function setupNotificationHandlers(router) {
 
   // Handle notification taps
   const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-    const data = response.notification.request.content.data;
-    console.log('Notification opened:', data);
-    
+    const data = response.notification.request.content.data;    
     // Reset badge count when notification is tapped
     Notifications.setBadgeCountAsync(0);
     
@@ -94,16 +90,16 @@ export function setupNotificationHandlers(router) {
       try {
         Linking.openURL(data.deepLink);
       } catch (error) {
-        console.error('Error opening deep link:', error);
+        console.log('Error opening deep link:', error);
       }
     }
     
     // Navigate to reminder details
     if (data.reminderId && router) {
       try {
-        router.push(`/ReminderDetails/${data.reminderId}`);
+        router.push(`/ReminderDetails?reminderId=${data.reminderId}`);
       } catch (error) {
-        console.error('Error navigating to reminder details:', error);
+        console.log('Error navigating to reminder details:', error);
       }
     }
   });
@@ -115,11 +111,11 @@ export function setupNotificationHandlers(router) {
       if (response) {
         const data = response.notification.request.content.data;
         if (data.reminderId && router) {
-          router.push(`/ReminderDetails/${data.reminderId}`);
+          router.push(`/ReminderDetails?reminderId=${data.reminderId}`);
         }
       }
     } catch (error) {
-      console.error('Error handling initial notification:', error);
+      console.log('Error handling initial notification:', error);
     }
   };
   
@@ -139,15 +135,13 @@ export function setupTokenRefreshListener(deviceRegistrationFn) {
     return { remove: () => {} };
   }
 
-  return Notifications.addPushTokenListener(async ({ token }) => {
-    console.log('Expo push token refreshed:', token);
-    
+  return Notifications.addPushTokenListener(async ({ token }) => {    
     // Send new token to server using the provided registration function
     try {
       await deviceRegistrationFn({ token });
       console.log('Device re-registered with new token successfully');
     } catch (error) {
-      console.error('Device re-registration error:', error);
+      console.log('Device re-registration error:', error);
     }
   });
 }
@@ -158,7 +152,7 @@ export async function clearAllNotifications() {
     await Notifications.dismissAllNotificationsAsync();
     await Notifications.setBadgeCountAsync(0);
   } catch (error) {
-    console.error('Error clearing notifications:', error);
+    console.log('Error clearing notifications:', error);
   }
 }
 
@@ -177,6 +171,6 @@ export async function scheduleTestNotification(title = 'Test', body = 'This is a
       trigger: { seconds: 2 },
     });
   } catch (error) {
-    console.error('Error scheduling test notification:', error);
+    console.log('Error scheduling test notification:', error);
   }
 }

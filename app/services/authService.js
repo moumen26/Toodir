@@ -1,4 +1,4 @@
-// services/authService.js - Updated to integrate with AuthContext logout
+// services/authService.js - Updated to prevent logout loops
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '../constants/storage';
@@ -19,6 +19,7 @@ const apiClient = axios.create({
 
 // Variable to store the logout function from AuthContext
 let forceLogoutFunction = null;
+let isLoggingOut = false; // Prevent multiple simultaneous logouts
 
 // Function to set the logout function (called from AuthContext)
 export const setForceLogoutFunction = (logoutFn) => {
@@ -49,9 +50,21 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle 401 errors (unauthorized)
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Handle 401 errors (unauthorized) - but avoid loops
+    if (error.response?.status === 401 && !originalRequest._retry && !isLoggingOut) {
       originalRequest._retry = true;
+
+      // Check if this is a device registration request
+      const isDeviceRegistration = originalRequest.url?.includes('/auth/device-registration');
+      
+      if (isDeviceRegistration) {
+        // For device registration, just return the error without logging out
+        console.log('Device registration failed with 401 - token may be expired');
+        return Promise.reject(new Error('Authentication expired'));
+      }
+
+      // For other requests, proceed with logout
+      isLoggingOut = true;
 
       try {
         // Clear stored auth data
@@ -73,6 +86,11 @@ apiClient.interceptors.response.use(
         if (forceLogoutFunction) {
           await forceLogoutFunction('Authentication error');
         }
+      } finally {
+        // Reset the logout flag after a delay
+        setTimeout(() => {
+          isLoggingOut = false;
+        }, 2000);
       }
     }
 
@@ -159,7 +177,7 @@ const authService = {
   // Login user
   login: async (credentials) => {
     try {
-      const response = await apiClient.post('/api/auth/login', credentials);
+      const response = await apiClient.post('/auth/login', credentials);
       return response;
     } catch (error) {
       throw error;
@@ -169,17 +187,17 @@ const authService = {
   // Register user
   register: async (userData) => {
     try {
-      const response = await apiClient.post('/api/auth/register', userData);
+      const response = await apiClient.post('/auth/register', userData);
       return response;
     } catch (error) {
       throw error;
     }
   },
 
-  // Device registration - Updated to match backend expectation
+  // Device registration - Updated to handle auth errors gracefully
   deviceRegistration: async (tokenData) => {
     try {
-      const response = await apiClient.post('/api/auth/device-registration', tokenData);
+      const response = await apiClient.post('/auth/device-registration', tokenData);
       return response;
     } catch (error) {
       // Don't throw on device registration errors to avoid breaking the app
@@ -191,7 +209,7 @@ const authService = {
   // Logout user (if you have a logout endpoint)
   logout: async () => {
     try {
-      await apiClient.post('/api/auth/logout');
+      await apiClient.post('/auth/logout');
     } catch (error) {
       // Continue with local logout even if API call fails
       console.log('Logout API error:', error);
@@ -201,7 +219,7 @@ const authService = {
   // Refresh token (if your API supports it)
   refreshToken: async () => {
     try {
-      const response = await apiClient.post('/api/auth/refresh');
+      const response = await apiClient.post('/auth/refresh');
       return response;
     } catch (error) {
       throw error;
@@ -211,7 +229,7 @@ const authService = {
   // Forgot password
   forgotPassword: async (email) => {
     try {
-      const response = await apiClient.post('/api/auth/forgot-password', { email });
+      const response = await apiClient.post('/auth/forgot-password', { email });
       return response;
     } catch (error) {
       throw error;
@@ -221,7 +239,7 @@ const authService = {
   // Reset password
   resetPassword: async (token, password) => {
     try {
-      const response = await apiClient.post('/api/auth/reset-password', {
+      const response = await apiClient.post('/auth/reset-password', {
         token,
         password
       });
@@ -234,7 +252,7 @@ const authService = {
   // Verify email (if you have email verification)
   verifyEmail: async (token) => {
     try {
-      const response = await apiClient.post('/api/auth/verify-email', { token });
+      const response = await apiClient.post('/auth/verify-email', { token });
       return response;
     } catch (error) {
       throw error;

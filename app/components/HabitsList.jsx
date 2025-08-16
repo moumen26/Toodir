@@ -130,7 +130,7 @@ const HabitsList = memo(({
         data: { date: today } 
       });
     } catch (error) {
-      console.error('Failed to mark habit as done:', error);
+      console.log('Failed to mark habit as done:', error);
     }
   }, [markDoneMutation]);
 
@@ -142,7 +142,7 @@ const HabitsList = memo(({
         data: { date: today } 
       });
     } catch (error) {
-      console.error('Failed to mark habit as skipped:', error);
+      console.log('Failed to mark habit as skipped:', error);
     }
   }, [markSkippedMutation]);
 
@@ -154,7 +154,7 @@ const HabitsList = memo(({
         data: { date: today } 
       });
     } catch (error) {
-      console.error('Failed to undo habit action:', error);
+      console.log('Failed to undo habit action:', error);
     }
   }, [undoActionMutation]);
 
