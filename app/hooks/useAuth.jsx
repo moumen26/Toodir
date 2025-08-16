@@ -49,6 +49,17 @@ export const useRegister = () => {
   };
 };
 
+// Hook for device registration functionality
+export const useDeviceRegister = () => {
+  const { deviceRegistration, isLoading, error } = useAuth();
+  
+  return {
+    deviceRegistration,
+    isLoading,
+    error,
+  };
+};
+
 // Hook to check authentication status
 export const useAuthStatus = () => {
   const { isAuthenticated, isLoading, user, token } = useAuth();

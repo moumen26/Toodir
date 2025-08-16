@@ -159,7 +159,7 @@ const authService = {
   // Login user
   login: async (credentials) => {
     try {
-      const response = await apiClient.post('/auth/login', credentials);
+      const response = await apiClient.post('/api/auth/login', credentials);
       return response;
     } catch (error) {
       throw error;
@@ -169,17 +169,29 @@ const authService = {
   // Register user
   register: async (userData) => {
     try {
-      const response = await apiClient.post('/auth/register', userData);
+      const response = await apiClient.post('/api/auth/register', userData);
       return response;
     } catch (error) {
       throw error;
     }
   },
 
+  // Device registration - Updated to match backend expectation
+  deviceRegistration: async (tokenData) => {
+    try {
+      const response = await apiClient.post('/api/auth/device-registration', tokenData);
+      return response;
+    } catch (error) {
+      // Don't throw on device registration errors to avoid breaking the app
+      console.error('Device registration failed:', error.message || error);
+      return { success: false, error: error.message || 'Device registration failed' };
+    }
+  },
+
   // Logout user (if you have a logout endpoint)
   logout: async () => {
     try {
-      await apiClient.post('/auth/logout');
+      await apiClient.post('/api/auth/logout');
     } catch (error) {
       // Continue with local logout even if API call fails
       console.log('Logout API error:', error);
@@ -189,7 +201,7 @@ const authService = {
   // Refresh token (if your API supports it)
   refreshToken: async () => {
     try {
-      const response = await apiClient.post('/auth/refresh');
+      const response = await apiClient.post('/api/auth/refresh');
       return response;
     } catch (error) {
       throw error;
@@ -199,7 +211,7 @@ const authService = {
   // Forgot password
   forgotPassword: async (email) => {
     try {
-      const response = await apiClient.post('/auth/forgot-password', { email });
+      const response = await apiClient.post('/api/auth/forgot-password', { email });
       return response;
     } catch (error) {
       throw error;
@@ -209,7 +221,7 @@ const authService = {
   // Reset password
   resetPassword: async (token, password) => {
     try {
-      const response = await apiClient.post('/auth/reset-password', {
+      const response = await apiClient.post('/api/auth/reset-password', {
         token,
         password
       });
@@ -222,7 +234,7 @@ const authService = {
   // Verify email (if you have email verification)
   verifyEmail: async (token) => {
     try {
-      const response = await apiClient.post('/auth/verify-email', { token });
+      const response = await apiClient.post('/api/auth/verify-email', { token });
       return response;
     } catch (error) {
       throw error;

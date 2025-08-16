@@ -23,98 +23,59 @@ import {
 } from "../hooks/useRemindersQueries";
 import { useTags } from "../hooks/useTagsQueries";
 import { useDebouncedCallback } from "../hooks/useDebounce";
-import RemindersFilterModal from "../components/RemindersFilterModal";
 
-const Reminders = () => {
+const RemindersListUpdated = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [selectedTag, setSelectedTag] = useState(null);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  
-  // Advanced filters state
-  const [advancedFilters, setAdvancedFilters] = useState({
-    status: '',
-    tag_id: '',
-    reminder_type: '',
-    date_from: '',
-    date_to: '',
-    search: '',
-    sort_by: 'reminder_date_time',
-    sort_order: 'ASC',
-  });
 
   const navigation = useNavigation();
 
   // Debounce search
   const debouncedSearch = useDebouncedCallback((query) => {
     setDebouncedQuery(query);
-    setAdvancedFilters(prev => ({ ...prev, search: query }));
   }, 300);
 
-  // Build filters for API - now combines quick filters and advanced filters
+  // Build filters for API
   const filters = useMemo(() => {
     const apiFilters = {
       limit: 10,
-      sort_by: advancedFilters.sort_by || 'reminder_date_time',
-      sort_order: advancedFilters.sort_order || 'ASC',
+      sort_by: 'reminder_date_time',
+      sort_order: 'ASC',
     };
 
-    // Add search from advanced filters
-    if (advancedFilters.search) {
-      apiFilters.search = advancedFilters.search;
+    if (debouncedQuery) {
+      apiFilters.search = debouncedQuery;
     }
 
-    // Add advanced filters
-    if (advancedFilters.status) {
-      apiFilters.status = advancedFilters.status;
-    }
-    if (advancedFilters.tag_id) {
-      apiFilters.tag_id = advancedFilters.tag_id;
-    }
-    if (advancedFilters.reminder_type) {
-      apiFilters.reminder_type = advancedFilters.reminder_type;
-    }
-    if (advancedFilters.date_from) {
-      apiFilters.date_from = advancedFilters.date_from;
-    }
-    if (advancedFilters.date_to) {
-      apiFilters.date_to = advancedFilters.date_to;
-    }
-
-    // Quick filters (only if no advanced filters are set)
-    const hasAdvancedFilters = advancedFilters.status || advancedFilters.tag_id || 
-                              advancedFilters.reminder_type || advancedFilters.date_from || 
-                              advancedFilters.date_to;
-
-    if (!hasAdvancedFilters) {
-      if (selectedFilter !== "All") {
-        if (selectedFilter === "today") {
-          const today = new Date();
-          const tomorrow = new Date(today);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          apiFilters.date_from = today.toISOString().split('T')[0];
-          apiFilters.date_to = tomorrow.toISOString().split('T')[0];
-          apiFilters.status = 'active';
-        } else if (selectedFilter === "scheduled") {
-          apiFilters.status = 'active';
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          apiFilters.date_from = tomorrow.toISOString().split('T')[0];
-        } else if (selectedFilter === "flagged") {
-          apiFilters.status = 'active';
-        } else {
-          apiFilters.status = selectedFilter;
-        }
+    if (selectedFilter !== "All") {
+      if (selectedFilter === "today") {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        apiFilters.date_from = today.toISOString().split('T')[0];
+        apiFilters.date_to = tomorrow.toISOString().split('T')[0];
+        apiFilters.status = 'active';
+      } else if (selectedFilter === "scheduled") {
+        apiFilters.status = 'active';
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        apiFilters.date_from = tomorrow.toISOString().split('T')[0];
+      } else if (selectedFilter === "flagged") {
+        // Note: Backend doesn't have flagged field, using high priority as alternative
+        apiFilters.status = 'active';
+      } else {
+        apiFilters.status = selectedFilter;
       }
+    }
 
-      if (selectedTag) {
-        apiFilters.tag_id = selectedTag.id;
-      }
+    if (selectedTag) {
+      apiFilters.tag_id = selectedTag.id;
     }
 
     return apiFilters;
-  }, [advancedFilters, selectedFilter, selectedTag]);
+  }, [debouncedQuery, selectedFilter, selectedTag]);
 
   // API Queries
   const {
@@ -195,95 +156,20 @@ const Reminders = () => {
     }));
   }, [tags, stats]);
 
-  // Check if advanced filters are active
-  const hasActiveAdvancedFilters = useMemo(() => {
-    return advancedFilters.status || advancedFilters.tag_id || 
-           advancedFilters.reminder_type || advancedFilters.date_from || 
-           advancedFilters.date_to || 
-           advancedFilters.sort_by !== 'reminder_date_time' ||
-           advancedFilters.sort_order !== 'ASC';
-  }, [advancedFilters]);
-
-  const getActiveFiltersCount = () => {
-    let count = 0;
-    if (advancedFilters.status) count++;
-    if (advancedFilters.tag_id) count++;
-    if (advancedFilters.reminder_type) count++;
-    if (advancedFilters.date_from) count++;
-    if (advancedFilters.date_to) count++;
-    if (advancedFilters.sort_by !== 'reminder_date_time') count++;
-    if (advancedFilters.sort_order !== 'ASC') count++;
-    return count;
-  };
-
   const handleSearchChange = useCallback((text) => {
     setSearchQuery(text);
     debouncedSearch(text);
   }, [debouncedSearch]);
 
   const handleFilterPress = useCallback((filter) => {
-    if (hasActiveAdvancedFilters) {
-      Alert.alert(
-        "Advanced Filters Active",
-        "You have advanced filters applied. Would you like to clear them and use the quick filter?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Clear & Apply", 
-            onPress: () => {
-              setAdvancedFilters({
-                status: '',
-                tag_id: '',
-                reminder_type: '',
-                date_from: '',
-                date_to: '',
-                search: searchQuery,
-                sort_by: 'reminder_date_time',
-                sort_order: 'ASC',
-              });
-              setSelectedFilter(filter);
-              setSelectedTag(null);
-            }
-          },
-        ]
-      );
-    } else {
-      setSelectedFilter(filter);
-      setSelectedTag(null);
-    }
-  }, [hasActiveAdvancedFilters, searchQuery]);
+    setSelectedFilter(filter);
+    setSelectedTag(null); // Clear tag filter when changing main filter
+  }, []);
 
   const handleTagPress = useCallback((tag) => {
-    if (hasActiveAdvancedFilters) {
-      Alert.alert(
-        "Advanced Filters Active",
-        "You have advanced filters applied. Would you like to clear them and filter by this tag?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { 
-            text: "Clear & Apply", 
-            onPress: () => {
-              setAdvancedFilters({
-                status: '',
-                tag_id: '',
-                reminder_type: '',
-                date_from: '',
-                date_to: '',
-                search: searchQuery,
-                sort_by: 'reminder_date_time',
-                sort_order: 'ASC',
-              });
-              setSelectedTag(tag);
-              setSelectedFilter("All");
-            }
-          },
-        ]
-      );
-    } else {
-      setSelectedTag(tag);
-      setSelectedFilter("All");
-    }
-  }, [hasActiveAdvancedFilters, searchQuery]);
+    setSelectedTag(tag);
+    setSelectedFilter("All"); // Reset main filter when selecting tag
+  }, []);
 
   const handleReminderPress = useCallback((reminder) => {
     router.push(`/ReminderDetails?reminderId=${reminder.id}`);
@@ -291,20 +177,6 @@ const Reminders = () => {
 
   const handleCreateReminder = useCallback(() => {
     router.push("/CreateReminder");
-  }, []);
-
-  const handleApplyAdvancedFilters = useCallback((newFilters) => {
-    setAdvancedFilters(newFilters);
-    // Clear quick filters when using advanced filters
-    setSelectedFilter("All");
-    setSelectedTag(null);
-  }, []);
-
-  const handleResetAdvancedFilters = useCallback((resetFilters) => {
-    setAdvancedFilters(resetFilters);
-    setSelectedFilter("All");
-    setSelectedTag(null);
-    setSearchQuery("");
   }, []);
 
   const handleCompleteReminder = useCallback(async (reminder) => {
@@ -541,7 +413,7 @@ const Reminders = () => {
     <TouchableOpacity
       style={[
         styles.filterCard,
-        selectedFilter === item.id && !hasActiveAdvancedFilters && styles.activeFilterCard,
+        selectedFilter === item.id && styles.activeFilterCard,
       ]}
       onPress={() => handleFilterPress(item.id)}
     >
@@ -561,7 +433,7 @@ const Reminders = () => {
     <TouchableOpacity
       style={[
         styles.listCard,
-        selectedTag?.id === item.id && !hasActiveAdvancedFilters && styles.activeListCard,
+        selectedTag?.id === item.id && styles.activeListCard,
       ]}
       onPress={() => handleTagPress(item)}
     >
@@ -594,11 +466,11 @@ const Reminders = () => {
       <Ionicons name="notifications-outline" size={64} color="#D1D5DB" />
       <Text style={styles.emptyStateTitle}>No reminders found</Text>
       <Text style={styles.emptyStateText}>
-        {searchQuery || hasActiveAdvancedFilters || selectedFilter !== "All" || selectedTag
+        {searchQuery || selectedFilter !== "All" || selectedTag
           ? "Try adjusting your search or filter criteria"
           : "Create your first reminder to get started"}
       </Text>
-      {!searchQuery && !hasActiveAdvancedFilters && selectedFilter === "All" && !selectedTag && (
+      {!searchQuery && selectedFilter === "All" && !selectedTag && (
         <TouchableOpacity style={styles.createFirstButton} onPress={handleCreateReminder}>
           <Text style={styles.createFirstButtonText}>Create Reminder</Text>
         </TouchableOpacity>
@@ -647,7 +519,7 @@ const Reminders = () => {
         </View>
       </View>
 
-      {/* Search Bar with Advanced Filter Button */}
+      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#9CA3AF" />
@@ -664,53 +536,37 @@ const Reminders = () => {
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            hasActiveAdvancedFilters && styles.activeFilterButton,
-          ]}
-          onPress={() => setShowFilterModal(true)}
-        >
-          <Ionicons 
-            name="funnel-outline" 
-            size={20} 
-            color={hasActiveAdvancedFilters ? "#fff" : "#1C30A4"} 
-          />
-          {getActiveFiltersCount() > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{getActiveFiltersCount()}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
       </View>
 
-      {/* Advanced Filters Indicator */}
-      {hasActiveAdvancedFilters && (
-        <View style={styles.advancedFiltersIndicator}>
-          <Text style={styles.advancedFiltersText}>
-            Advanced filters active ({getActiveFiltersCount()})
-          </Text>
-          <TouchableOpacity
-            onPress={() => handleResetAdvancedFilters({
-              status: '',
-              tag_id: '',
-              reminder_type: '',
-              date_from: '',
-              date_to: '',
-              search: '',
-              sort_by: 'reminder_date_time',
-              sort_order: 'ASC',
-            })}
-            style={styles.clearAdvancedFiltersButton}
-          >
-            <Text style={styles.clearAdvancedFiltersText}>Clear All</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Filter Stats */}
+      <View style={styles.statsSection}>
+        <Text style={styles.statsSectionTitle}>Filter Reminders</Text>
+        <FlatList
+          data={filterOptions}
+          renderItem={renderFilterItem}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.statsScrollContainer}
+        />
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* My Lists Section */}
+        {myLists.length > 0 && (
+          <View style={styles.myListsSection}>
+            <Text style={styles.sectionTitle}>My Lists</Text>
+            <FlatList
+              data={myLists}
+              renderItem={renderMyListItem}
+              keyExtractor={(item) => item.id.toString()}
+              scrollEnabled={false}
+            />
+          </View>
+        )}
+
         {/* Active Filter Indicator */}
-        {(selectedFilter !== "All" || selectedTag) && !hasActiveAdvancedFilters && (
+        {(selectedFilter !== "All" || selectedTag) && (
           <View style={styles.activeFilterContainer}>
             <Text style={styles.activeFilterText}>
               Filtered by: {selectedTag ? selectedTag.name : selectedFilter}
@@ -756,15 +612,6 @@ const Reminders = () => {
           </View>
         )}
       </ScrollView>
-
-      {/* Filter Modal */}
-      <RemindersFilterModal
-        visible={showFilterModal}
-        onClose={() => setShowFilterModal(false)}
-        filters={advancedFilters}
-        onApplyFilters={handleApplyAdvancedFilters}
-        onResetFilters={handleResetAdvancedFilters}
-      />
     </SafeAreaView>
   );
 };
@@ -842,21 +689,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: "#374151",
-  },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
     marginBottom: 16,
-    gap: 10,
   },
   searchBar: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
@@ -872,59 +709,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  activeFilterButton: {
-    backgroundColor: '#1C30A4',
-  },
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filterBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  advancedFiltersIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#EEF2FF',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1C30A4',
-  },
-  advancedFiltersText: {
-    fontSize: 14,
-    color: '#1C30A4',
-    fontWeight: '500',
-  },
-  clearAdvancedFiltersButton: {
-    padding: 4,
-  },
-  clearAdvancedFiltersText: {
-    color: '#1C30A4',
-    fontSize: 14,
-    fontWeight: '600',
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: "#374151",
   },
   statsSection: {
     marginBottom: 16,
@@ -1297,4 +1086,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Reminders;
+export default RemindersListUpdated;
