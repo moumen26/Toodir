@@ -252,24 +252,33 @@ const Tasks = () => {
         </View>
       </View>
 
-      {/* Status Filters */}
-      <StatusFilters
-        type="tasks"
-        filters={statusOptions}
-        stats={stats}
-        selectedFilter={selectedFilter}
-        onFilterChange={handleFilterChange}
-      />
+      {/* Unified Scrollable Container with Status Filters and Tasks List */}
+      <ScrollView 
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Status Filters */}
+        <View style={styles.statusFiltersContainer}>
+          <StatusFilters
+            type="tasks"
+            filters={statusOptions}
+            stats={stats}
+            selectedFilter={selectedFilter}
+            onFilterChange={handleFilterChange}
+          />
+        </View>
 
-      {/* Tasks List */}
-      <TaskList
-        filters={apiFilters}
-        onTaskPress={handleTaskPress}
-        showProject={true}
-        showAssignments={true}
-        style={styles.tasksList}
-        contentContainerStyle={styles.tasksListContent}
-      />
+        {/* Tasks List */}
+        <TaskList
+          filters={apiFilters}
+          onTaskPress={handleTaskPress}
+          showProject={true}
+          showAssignments={true}
+          scrollEnabled={false} // Disable internal scrolling since we're using external ScrollView
+          style={styles.tasksList}
+        />
+      </ScrollView>
 
       {/* Detailed Filters Modal */}
       <Modal
@@ -519,11 +528,18 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "#EF4444",
   },
-  tasksList: {
+  // New unified scrollable container styles
+  scrollContainer: {
     flex: 1,
   },
-  tasksListContent: {
+  scrollContent: {
     paddingBottom: 100,
+  },
+  statusFiltersContainer: {
+    marginBottom: 16,
+  },
+  tasksList: {
+    // Remove flex: 1 since it's now inside a ScrollView
   },
   // Modal styles
   modalOverlay: {

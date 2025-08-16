@@ -180,10 +180,7 @@ const styles = StyleSheet.create({
   },
   filtersScrollView: {
     marginBottom: 16,
-  },
-  filtersScrollContainer: {
-    paddingLeft: 20,
-    paddingRight: 20,
+    paddingHorizontal: 20
   },
   priorityFiltersScrollView: {
     marginBottom: 0,

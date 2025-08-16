@@ -42,9 +42,7 @@ const Habits = () => {
   const expandIconRotation = useSharedValue(0);
   const miniCalendarMargin = useSharedValue(0);
 
-  const navigation = useNavigation();
-
-    // Helper functions
+  // Helper functions
   const getHabitIcon = (name, tags) => {
     const nameUpper = name.toUpperCase();
     if (nameUpper.includes('EXERCISE') || nameUpper.includes('GYM') || nameUpper.includes('WORKOUT')) return 'fitness-outline';
@@ -71,11 +69,6 @@ const Habits = () => {
     isError: habitsError,
     refetch: refetchHabits 
   } = useHabitsForDate(selectedDateString);
-
-  const { 
-    data: statsData, 
-    isLoading: statsLoading 
-  } = useHabitStats('week');
 
   // Mutations
   const markDoneMutation = useMarkHabitDone();
@@ -284,6 +277,167 @@ const Habits = () => {
   const animatedMiniCalendarStyle = useAnimatedStyle(() => ({
     marginTop: miniCalendarMargin.value,
   }));
+
+  // Search and Filter components
+  const SearchAndFilters = () => (
+    <>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#9CA3AF" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search habits, categories, or tags..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#9CA3AF"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Habit Overview Stats as Filters */}
+      <View style={styles.statsSection}>
+        <Text style={styles.statsSectionTitle}>Filter Habits</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.statsScrollContainer}
+          style={styles.statsScrollView}
+        >
+          {/* All Habits Filter */}
+          <TouchableOpacity
+            style={[
+              styles.progressStatCard,
+              selectedFilter === "All" && styles.activeFilterCard,
+            ]}
+            onPress={() => handleFilterPress("All")}
+          >
+            <View style={styles.progressCardHeader}>
+              <View style={styles.progressIcon}>
+                <Ionicons name="list" size={12} color="#1C30A4" />
+              </View>
+              <Text style={styles.progressCardTitle}>All Habits</Text>
+            </View>
+            <Text style={styles.progressCardNumber}>
+              {habits.length > 0 ? Math.round(
+                habits.reduce((acc, habit) => {
+                  return acc + getHabitProgress(habit);
+                }, 0) / habits.length
+              ) : 0}%
+            </Text>
+            <View style={styles.progressCardBar}>
+              <View style={styles.progressCardBackground}>
+                <View
+                  style={[
+                    styles.progressCardFill,
+                    {
+                      width: `${habits.length > 0 ? Math.round(
+                        habits.reduce((acc, habit) => {
+                          return acc + getHabitProgress(habit);
+                        }, 0) / habits.length
+                      ) : 0}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+            <Text style={styles.progressCardSubtext}>Avg Progress</Text>
+          </TouchableOpacity>
+
+          {/* Active Habits Filter */}
+          <TouchableOpacity
+            style={[
+              styles.statCard,
+              { backgroundColor: "#EFF6FF", borderColor: "#3B82F6" },
+              selectedFilter === "active" && styles.activeFilterCard,
+            ]}
+            onPress={() => handleFilterPress("active")}
+          >
+            <View style={styles.statCardHeader}>
+              <View
+                style={[styles.statCardIcon, { backgroundColor: "#3B82F6" }]}
+              >
+                <Ionicons name="time" size={10} color="#fff" />
+              </View>
+              <View style={styles.statCardTrend}>
+                <Ionicons name="arrow-up" size={8} color="#3B82F6" />
+              </View>
+            </View>
+            <Text style={[styles.statCardNumber, { color: "#3B82F6" }]}>
+              {activeHabits.length}
+            </Text>
+            <Text style={styles.statCardLabel}>Active</Text>
+            <View style={styles.statCardProgress}>
+              <View
+                style={[
+                  styles.statCardProgressBg,
+                  { backgroundColor: "#3B82F6" + "30" },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statCardProgressFill,
+                    {
+                      width: habits.length > 0 ? `${(activeHabits.length / habits.length) * 100}%` : '0%',
+                      backgroundColor: "#3B82F6",
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Completed Filter */}
+          <TouchableOpacity
+            style={[
+              styles.statCard,
+              { backgroundColor: "#F0FDF4", borderColor: "#10B981" },
+              selectedFilter === "completed" && styles.activeFilterCard,
+            ]}
+            onPress={() => handleFilterPress("completed")}
+          >
+            <View style={styles.statCardHeader}>
+              <View
+                style={[styles.statCardIcon, { backgroundColor: "#10B981" }]}
+              >
+                <Ionicons name="checkmark-circle" size={10} color="#fff" />
+              </View>
+              <View style={styles.statCardTrend}>
+                <Ionicons name="arrow-up" size={8} color="#10B981" />
+              </View>
+            </View>
+            <Text style={[styles.statCardNumber, { color: "#10B981" }]}>
+              {completedHabits.length}
+            </Text>
+            <Text style={styles.statCardLabel}>Done</Text>
+            <View style={styles.statCardProgress}>
+              <View
+                style={[
+                  styles.statCardProgressBg,
+                  { backgroundColor: "#10B981" + "30" },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statCardProgressFill,
+                    {
+                      width: habits.length > 0 ? `${(completedHabits.length / habits.length) * 100}%` : '0%',
+                      backgroundColor: "#10B981",
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </>
+  );
 
   const renderHabitCard = ({ item }) => (
     <TouchableOpacity
@@ -612,163 +766,7 @@ const Habits = () => {
         </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#9CA3AF" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search habits, categories, or tags..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#9CA3AF"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Habit Overview Stats as Filters */}
-      <View style={styles.statsSection}>
-        <Text style={styles.statsSectionTitle}>Filter Habits</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsScrollContainer}
-          style={styles.statsScrollView}
-        >
-          {/* All Habits Filter */}
-          <TouchableOpacity
-            style={[
-              styles.progressStatCard,
-              selectedFilter === "All" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("All")}
-          >
-            <View style={styles.progressCardHeader}>
-              <View style={styles.progressIcon}>
-                <Ionicons name="list" size={12} color="#1C30A4" />
-              </View>
-              <Text style={styles.progressCardTitle}>All Habits</Text>
-            </View>
-            <Text style={styles.progressCardNumber}>
-              {habits.length > 0 ? Math.round(
-                habits.reduce((acc, habit) => {
-                  return acc + getHabitProgress(habit);
-                }, 0) / habits.length
-              ) : 0}%
-            </Text>
-            <View style={styles.progressCardBar}>
-              <View style={styles.progressCardBackground}>
-                <View
-                  style={[
-                    styles.progressCardFill,
-                    {
-                      width: `${habits.length > 0 ? Math.round(
-                        habits.reduce((acc, habit) => {
-                          return acc + getHabitProgress(habit);
-                        }, 0) / habits.length
-                      ) : 0}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-            <Text style={styles.progressCardSubtext}>Avg Progress</Text>
-          </TouchableOpacity>
-
-          {/* Active Habits Filter */}
-          <TouchableOpacity
-            style={[
-              styles.statCard,
-              { backgroundColor: "#EFF6FF", borderColor: "#3B82F6" },
-              selectedFilter === "active" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("active")}
-          >
-            <View style={styles.statCardHeader}>
-              <View
-                style={[styles.statCardIcon, { backgroundColor: "#3B82F6" }]}
-              >
-                <Ionicons name="time" size={10} color="#fff" />
-              </View>
-              <View style={styles.statCardTrend}>
-                <Ionicons name="arrow-up" size={8} color="#3B82F6" />
-              </View>
-            </View>
-            <Text style={[styles.statCardNumber, { color: "#3B82F6" }]}>
-              {activeHabits.length}
-            </Text>
-            <Text style={styles.statCardLabel}>Active</Text>
-            <View style={styles.statCardProgress}>
-              <View
-                style={[
-                  styles.statCardProgressBg,
-                  { backgroundColor: "#3B82F6" + "30" },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statCardProgressFill,
-                    {
-                      width: habits.length > 0 ? `${(activeHabits.length / habits.length) * 100}%` : '0%',
-                      backgroundColor: "#3B82F6",
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {/* Completed Filter */}
-          <TouchableOpacity
-            style={[
-              styles.statCard,
-              { backgroundColor: "#F0FDF4", borderColor: "#10B981" },
-              selectedFilter === "completed" && styles.activeFilterCard,
-            ]}
-            onPress={() => handleFilterPress("completed")}
-          >
-            <View style={styles.statCardHeader}>
-              <View
-                style={[styles.statCardIcon, { backgroundColor: "#10B981" }]}
-              >
-                <Ionicons name="checkmark-circle" size={10} color="#fff" />
-              </View>
-              <View style={styles.statCardTrend}>
-                <Ionicons name="arrow-up" size={8} color="#10B981" />
-              </View>
-            </View>
-            <Text style={[styles.statCardNumber, { color: "#10B981" }]}>
-              {completedHabits.length}
-            </Text>
-            <Text style={styles.statCardLabel}>Done</Text>
-            <View style={styles.statCardProgress}>
-              <View
-                style={[
-                  styles.statCardProgressBg,
-                  { backgroundColor: "#10B981" + "30" },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statCardProgressFill,
-                    {
-                      width: habits.length > 0 ? `${(completedHabits.length / habits.length) * 100}%` : '0%',
-                      backgroundColor: "#10B981",
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* Habits List */}
+      {/* Habits List with Search and Filters as ListHeaderComponent */}
       <FlatList
         data={filteredHabits}
         renderItem={renderHabitCard}
@@ -783,6 +781,7 @@ const Habits = () => {
             tintColor="#1C30A4"
           />
         }
+        ListHeaderComponent={<SearchAndFilters />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="checkmark-done-outline" size={64} color="#D1D5DB" />
@@ -1121,7 +1120,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   searchContainer: {
-    paddingHorizontal: 20,
     marginBottom: 16,
   },
   searchBar: {
@@ -1154,14 +1152,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     marginBottom: 8,
-    paddingHorizontal: 20,
   },
   statsScrollView: {
     marginBottom: 0,
-  },
-  statsScrollContainer: {
-    paddingLeft: 20,
-    paddingRight: 20,
   },
   progressStatCard: {
     backgroundColor: "#1C30A4",

@@ -13,19 +13,20 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.zynoxi12.TooDir"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/index.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/index.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -37,8 +38,8 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "http://192.168.43.153:8000/api",
-      "filesUrl": "http://192.168.43.153:8000",
+      "apiUrl": "https://toodir-server-side.onrender.com/api",
+      "filesUrl": "https://toodir-server-side.onrender.com",
       "router": {},
       "eas": {
         "projectId": "f4aa15d2-37bb-448f-9de4-8420f8fdb313"
