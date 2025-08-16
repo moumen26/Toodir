@@ -28,9 +28,7 @@ const NotificationInitializer = () => {
         const token = await registerForPushNotifications();
         
         // Send token to backend if we have one and user is still authenticated
-        if (token && isAuthenticated) {
-          console.log('Registering device with token:', token);
-          
+        if (token && isAuthenticated) {          
           try {
             const result = await deviceRegistration({ token });
             if (result?.success !== false) {

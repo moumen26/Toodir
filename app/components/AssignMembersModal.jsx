@@ -322,7 +322,6 @@ const AssignMembersModal = ({
   }, [renderMemberAvatar, getActionButtonStyle, pendingChanges, handleMemberAction]);
 
   const renderSectionHeader = useCallback(({ section }) => {
-    console.log('Rendering section header:', section.title);
     return (
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionHeaderText}>{section.title}</Text>

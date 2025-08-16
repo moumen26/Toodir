@@ -56,7 +56,6 @@ const HabitDetails = () => {
     if (!habitData?.data?.habit) return null;
     
     const { habit: h, statistics, calendar_data } = habitData.data;
-    console.log(h);
     return {
       id: h.id,
       name: h.name,

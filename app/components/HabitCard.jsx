@@ -131,7 +131,7 @@ const HabitCard = memo(({
           <Text style={styles.habitInfoText}>{habit.streak} day streak</Text>
         </View>
         <View style={styles.habitInfoItem}>
-          <Ionicons name="target-outline" size={14} color="#6B7280" />
+          <Ionicons name="locate-outline" size={14} color="#6B7280" />
           <Text style={styles.habitInfoText}>
             {habit.current}/{habit.target} {habit.unit}
           </Text>

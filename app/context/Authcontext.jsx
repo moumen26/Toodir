@@ -139,13 +139,10 @@ export const AuthContextProvider = ({ children }) => {
   // Device registration function
   const deviceRegistration = async (tokenData) => {
     try {
-      console.log('Registering device with token data:', tokenData);
       const response = await authService.deviceRegistration(tokenData);
-      console.log('Device registration response:', response);
       return response;
     } catch (error) {
       console.log('Device registration error:', error);
-      // Don't throw the error to avoid breaking the app initialization
       return { success: false, error: error.message || 'Device registration failed' };
     }
   };
