@@ -88,6 +88,14 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen
+                  name="UpdateProject/index"
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    animation: 'slide_from_right',
+                  }}
+                />
+                <Stack.Screen
                   name="ManageFriends/index"
                   options={{
                     headerShown: false,

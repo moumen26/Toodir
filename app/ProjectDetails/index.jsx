@@ -1,4 +1,4 @@
-// ProjectDetails/index.jsx - Updated with Add Member & Swipe Delete
+// ProjectDetails/index.jsx - Updated with enhanced edit functionality
 import { useState, useMemo, useCallback } from "react";
 import {
   View,
@@ -11,23 +11,21 @@ import {
   SafeAreaView,
   ActivityIndicator,
   FlatList,
-  Animated,
-  PanGestureHandler,
-  State
+  Platform,
 } from "react-native";
+import { router } from 'expo-router';
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useLocalSearchParams, router } from "expo-router";
+import { useNavigation, useLocalSearchParams } from "expo-router";
 import { useProject, useProjectStats } from "../hooks/useProjectQueries";
 import { useProjectTasks } from "../hooks/useTaskQueries";
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import TaskCard from '../components/TaskCard'
-import Constants from 'expo-constants';
-import ProjectMembersPopup from '../components/ProjectMembersPopup';
-import SwipeableMemberCard from '../components/SwipeableMemberCard';
 import { useAuthStatus } from "../hooks/useAuth";
+import TaskCard from '../components/TaskCard';
+import SwipeableMemberCard from '../components/SwipeableMemberCard';
+import ProjectMembersPopup from '../components/ProjectMembersPopup';
 import projectMemberService from '../services/projectMemberService';
+import Constants from 'expo-constants';
 
-// Get API URL from Expo Constants
 const FILES_URL = Constants.expoConfig?.extra?.filesUrl;
 
 const ProjectDetails = () => {
@@ -80,24 +78,86 @@ const ProjectDetails = () => {
   const stats = statsData?.data;
   const projectTasks = projectTasksData?.data || [];
   const isOwner = user?.id == project?.owner_id;
+  const canEdit = isOwner; // Add more complex permission logic here if needed
 
   const tabs = ["Overview", "Tasks", "Team"];
 
-  const handleBackPress = () => {
+  const handleBackPress = useCallback(() => {
     navigation.goBack();
-  };
+  }, [navigation]);
 
-  const handleEditProject = () => {
-    Alert.alert("Edit Project", "Navigate to edit project screen");
-  };
+  const toProjectUpdate = useCallback((projectId, options = {}) => {
+    if (!projectId) {
+      Alert.alert('Error', 'Project ID is required');
+      return;
+    }
+    
+    const route = `/UpdateProject?projectId=${projectId}`;
+    
+    // Check if user has permission (optional callback)
+    if (options.checkPermission && typeof options.checkPermission === 'function') {
+      const hasPermission = options.checkPermission();
+      if (!hasPermission) {
+        Alert.alert('Access Denied', 'You don\'t have permission to edit this project');
+        return;
+      }
+    }
+    
+    // Show confirmation if there are unsaved changes elsewhere
+    if (options.confirmNavigation) {
+      Alert.alert(
+        'Navigate to Edit',
+        'Are you sure you want to navigate to edit this project?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Continue', 
+            onPress: () => {
+              if (options.replace) {
+                router.replace(route);
+              } else {
+                router.push(route);
+              }
+            }
+          },
+        ]
+      );
+    } else {
+      if (options.replace) {
+        router.replace(route);
+      } else {
+        router.push(route);
+      }
+    }
+  }, [canEdit, projectId]);
+
+  // Enhanced edit project handler
+  const handleEditProject = useCallback(() => {
+    if (!canEdit) {
+      Alert.alert(
+        "Access Denied", 
+        "You don't have permission to edit this project.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    if (!project) {
+      Alert.alert("Error", "Project data not loaded");
+      return;
+    }
+
+    // For now, directly navigate to update screen
+    toProjectUpdate(project.id, {
+      checkPermission: () => canEdit
+    });
+  }, [canEdit, project, projectId]);
 
   const handleCreateTask = useCallback(() => {
-    // Navigate to create task with project pre-selected
-    router.push(`/CreateTask?projectId=${projectId}`);
+    navigation.navigate("CreateTask/index");
   }, [projectId]);
 
   const handleTaskPress = useCallback((task) => {
-    router.push(`/TaskDetails?taskId=${task.id}`);
   }, []);
 
   const handleTaskFilterChange = useCallback((filter) => {
@@ -105,13 +165,11 @@ const ProjectDetails = () => {
   }, []);
 
   const handleRemoveMember = async (member) => {        
-    // Don't allow removing the owner
     if (member.id === project?.owner_id) {
       Alert.alert('Cannot Remove Owner', 'The project owner cannot be removed from the project.');
       return;
     }
 
-    // Don't allow removing yourself
     if (member.id === user?.id) {
       Alert.alert('Cannot Remove Yourself', 'You cannot remove yourself from the project. Transfer ownership first if needed.');
       return;
@@ -128,9 +186,7 @@ const ProjectDetails = () => {
           onPress: async () => {
             try {
               setRemovingMember(member.id);
-
               await removeMemberMutation.mutateAsync(member.id);
-              
               Alert.alert(
                 'Success',
                 `${member.full_name} has been removed from the project.`,
@@ -151,9 +207,9 @@ const ProjectDetails = () => {
     );
   };
 
-  const handleAddMembers = () => {
+  const handleAddMembers = useCallback(() => {
     setShowMembersPopup(true);
-  };
+  }, []);
 
   // Filter tasks based on selected filter
   const filteredTasks = useMemo(() => {
@@ -177,12 +233,12 @@ const ProjectDetails = () => {
       case "medium":
       case "low":
         return projectTasks.filter(task => task.priority?.toLowerCase() === selectedTaskFilter);
-      default: // "all"
+      default:
         return projectTasks;
     }
   }, [projectTasks, selectedTaskFilter]);
 
-  const getPriorityColor = (priority) => {
+  const getPriorityColor = useCallback((priority) => {
     switch (priority?.toLowerCase()) {
       case "high":
         return "#EF4444";
@@ -193,30 +249,22 @@ const ProjectDetails = () => {
       default:
         return "#6B7280";
     }
-  };
+  }, []);
 
-  const renderAvatar = (member, size = 32) => (    
-    <View
-      style={[
-        styles.avatar,
-        { width: size, height: size, borderRadius: size / 2 },
-      ]}
-    >
+  const renderAvatar = useCallback((member, size = 32) => (    
+    <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
       {member.profile_picture ? (
         <Image
           source={{ uri:`${FILES_URL}${member.profile_picture}` }}
-          style={[
-            styles.avatarImage,
-            { width: size, height: size, borderRadius: size / 2 },
-          ]}
+          style={[styles.avatarImage, { width: size, height: size, borderRadius: size / 2 }]}
         />
       ) : (
         <Ionicons name="person" size={size * 0.6} color="#9CA3AF" />
       )}
     </View>
-  );
+  ), []);
 
-  const formatDate = (dateString) => {
+  const formatDate = useCallback((dateString) => {
     if (!dateString) return 'No date set';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -224,9 +272,9 @@ const ProjectDetails = () => {
       day: 'numeric',
       year: 'numeric',
     });
-  };
+  }, []);
 
-  // Calculate task statistics for the project using server stats
+  // Calculate task statistics
   const taskStats = useMemo(() => {
     if (stats?.task_summary) {
       return {
@@ -243,7 +291,6 @@ const ProjectDetails = () => {
       };
     }
     
-    // Fallback to local calculation if server stats not available
     if (!projectTasks.length) return {};
     
     const total = projectTasks.length;
@@ -268,6 +315,7 @@ const ProjectDetails = () => {
     };
   }, [stats, projectTasks]);
 
+  // Render functions for different tabs...
   const renderOverviewTab = () => (
     <View style={styles.tabContent}>
       {/* Project Stats */}
@@ -288,10 +336,12 @@ const ProjectDetails = () => {
             </View>
           </View>
         </View>
+        
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>{taskStats.total || 0}</Text>
           <Text style={styles.statLabel}>Tasks</Text>
         </View>
+        
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>
             {stats?.project_resources?.total_members || project?.members?.length || 0}
@@ -335,37 +385,7 @@ const ProjectDetails = () => {
         )}
       </View>
 
-      {/* Quick Task Stats */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Task Overview</Text>
-        <View style={styles.quickStatsGrid}>
-          <View style={[styles.quickStatCard, { borderLeftColor: "#3B82F6" }]}>
-            <View style={styles.quickStatInfo}>
-              <Text style={styles.quickStatNumber}>{taskStats.active || 0}</Text>
-              <Text style={styles.quickStatLabel}>Active</Text>
-            </View>
-            <Ionicons name="time" size={24} color="#3B82F6" />
-          </View>
-          
-          <View style={[styles.quickStatCard, { borderLeftColor: "#10B981" }]}>
-            <View style={styles.quickStatInfo}>
-              <Text style={styles.quickStatNumber}>{taskStats.completed || 0}</Text>
-              <Text style={styles.quickStatLabel}>Completed</Text>
-            </View>
-            <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-          </View>
-          
-          <View style={[styles.quickStatCard, { borderLeftColor: "#EF4444" }]}>
-            <View style={styles.quickStatInfo}>
-              <Text style={styles.quickStatNumber}>{taskStats.overdue || 0}</Text>
-              <Text style={styles.quickStatLabel}>Overdue</Text>
-            </View>
-            <Ionicons name="warning" size={24} color="#EF4444" />
-          </View>
-        </View>
-      </View>
-
-      {/* Description */}
+      {/* Project Details and other sections... */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Description</Text>
         <Text style={styles.description}>
@@ -373,7 +393,6 @@ const ProjectDetails = () => {
         </Text>
       </View>
 
-      {/* Project Details */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Project Details</Text>
         <View style={styles.detailsContainer}>
@@ -409,7 +428,10 @@ const ProjectDetails = () => {
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {project.images.map((image, index) => (
               <View key={image.id} style={styles.imageContainer}>
-                <Image source={{ uri: `${FILES_URL}${image.image_url}` }} style={styles.projectDetailImage} />
+                <Image 
+                  source={{ uri: `${FILES_URL}${image.image_url}` }} 
+                  style={styles.projectDetailImage} 
+                />
                 {image.is_primary && (
                   <View style={styles.primaryBadge}>
                     <Text style={styles.primaryBadgeText}>Primary</Text>
@@ -423,6 +445,7 @@ const ProjectDetails = () => {
     </View>
   );
 
+  // Tasks tab render function
   const renderTasksTab = () => {
     const renderTaskFilters = () => (
       <View style={styles.taskFiltersContainer}>
@@ -486,7 +509,6 @@ const ProjectDetails = () => {
 
     const renderTaskHeader = () => (
       <View>
-        {/* Task Header with Add Button */}
         <View style={styles.tasksHeader}>
           <View style={styles.tasksHeaderLeft}>
             <Text style={styles.sectionTitle}>
@@ -504,8 +526,6 @@ const ProjectDetails = () => {
             <Text style={styles.addTaskButtonText}>Add Task</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Task Filters */}
         {renderTaskFilters()}
       </View>
     );
@@ -549,6 +569,7 @@ const ProjectDetails = () => {
     );
   };
 
+  // Team tab render function
   const renderTeamTab = () => (
     <View style={styles.tabContent}>
       <View style={styles.sectionHeader}>
@@ -664,9 +685,30 @@ const ProjectDetails = () => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Project Details</Text>
         </View>
-        <TouchableOpacity onPress={handleEditProject} style={styles.editButton}>
-          <Ionicons name="create-outline" size={20} color="#1C30A4" />
-        </TouchableOpacity>
+        
+        {/* Enhanced Edit Button with permission check */}
+        {canEdit && (
+          <TouchableOpacity 
+            onPress={handleEditProject} 
+            style={[
+              styles.editButton,
+              !canEdit && styles.disabledEditButton
+            ]}
+            disabled={!canEdit}
+          >
+            <Ionicons 
+              name="create-outline" 
+              size={20} 
+              color={canEdit ? "#1C30A4" : "#9CA3AF"} 
+            />
+            <Text style={[
+              styles.editButtonText,
+              !canEdit && styles.disabledEditButtonText
+            ]}>
+              Edit
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Project Header Card */}
@@ -674,7 +716,9 @@ const ProjectDetails = () => {
         <View style={styles.projectIcon}>
           {project?.images && project?.images?.length > 0 ? (
             <Image
-              source={{ uri: `${FILES_URL}${project?.images?.find(img => img.is_primary)?.image_url || project.images[0].image_url}` }}
+              source={{ 
+                uri: `${FILES_URL}${project?.images?.find(img => img.is_primary)?.image_url || project.images[0].image_url}` 
+              }}
               style={styles.projectHeaderImage}
             />
           ) : (
@@ -757,7 +801,7 @@ const ProjectDetails = () => {
         </ScrollView>
       )}
 
-      {/* Project Members Popup - Only show for owners */}
+      {/* Project Members Popup */}
       {isOwner && (
         <ProjectMembersPopup
           visible={showMembersPopup}
@@ -826,6 +870,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   headerLeft: {
     flexDirection: "row",
@@ -834,6 +889,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     marginRight: 12,
+    padding: 4,
   },
   headerTitle: {
     fontSize: 18,
@@ -841,7 +897,27 @@ const styles = StyleSheet.create({
     color: "#374151",
   },
   editButton: {
-    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#EEF2FF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#1C30A4",
+  },
+  disabledEditButton: {
+    backgroundColor: "#F3F4F6",
+    borderColor: "#E5E7EB",
+  },
+  editButtonText: {
+    fontSize: 14,
+    color: "#1C30A4",
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  disabledEditButtonText: {
+    color: "#9CA3AF",
   },
   projectHeader: {
     backgroundColor: "#fff",
@@ -850,11 +926,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     flexDirection: "row",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   projectIcon: {
     width: 60,
@@ -982,12 +1064,18 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
     minWidth: "22%",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   statNumber: {
     fontSize: 20,
@@ -1014,7 +1102,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#1C30A4",
     borderRadius: 2,
   },
-  // Enhanced Stats Styles
   enhancedStatsContainer: {
     flexDirection: "row",
     marginBottom: 24,
@@ -1027,11 +1114,17 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   enhancedStatIcon: {
     width: 36,
@@ -1070,37 +1163,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#374151",
     marginBottom: 12,
-  },
-  quickStatsGrid: {
-    gap: 12,
-  },
-  quickStatCard: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderLeftWidth: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  quickStatInfo: {
-    flex: 1,
-  },
-  quickStatNumber: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#374151",
-    marginBottom: 4,
-  },
-  quickStatLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "500",
   },
   description: {
     fontSize: 14,
@@ -1175,11 +1237,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    shadowColor: "#1C30A4",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#1C30A4",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   addTaskButtonText: {
     color: "#fff",
@@ -1187,7 +1255,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 6,
   },
-  // Tasks Tab Styles (FlatList version)
   tasksTabContainer: {
     flex: 1,
     backgroundColor: "#F8FAFC",

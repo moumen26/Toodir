@@ -1,4 +1,3 @@
-// components/SwipeableMemberCard.jsx - Simple version without gesture handler
 import React, { useState } from 'react';
 import {
   View,

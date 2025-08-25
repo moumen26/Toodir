@@ -1,3 +1,4 @@
+// hooks/useProjectQueries.jsx - Enhanced with optimized update mutation
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import projectService from '../services/projectService';
 
@@ -80,26 +81,162 @@ export const useCreateProject = () => {
   });
 };
 
-// Update project mutation
+// Update project mutation - Enhanced with optimizations
 export const useUpdateProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ projectId, projectData }) => 
-      projectService.updateProject(projectId, projectData),
+    mutationFn: ({ projectId, projectData }) => {
+      // Validate data before sending
+      const validation = projectService.validateProjectData(projectData);
+      if (!validation.isValid) {
+        const errorMessages = Object.values(validation.errors).flat();
+        throw new Error(errorMessages.join(', '));
+      }
+      
+      return projectService.updateProject(projectId, projectData);
+    },
+    
+    // Optimistic updates for better UX
+    onMutate: async ({ projectId, projectData }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: projectKeys.detail(projectId) });
+      await queryClient.cancelQueries({ queryKey: projectKeys.lists() });
+
+      // Snapshot the previous value
+      const previousProject = queryClient.getQueryData(projectKeys.detail(projectId));
+
+      // Optimistically update the project detail
+      if (previousProject?.data) {
+        const optimisticUpdate = {
+          ...previousProject,
+          data: {
+            ...previousProject.data,
+            ...projectData,
+            // Handle tags update
+            ...(projectData.tags && {
+              tags: projectData.tags.map(tagId => 
+                typeof tagId === 'string' 
+                  ? previousProject.data.tags?.find(tag => tag.id === tagId) || { id: tagId }
+                  : tagId
+              )
+            }),
+            updated_at: new Date().toISOString(),
+          }
+        };
+
+        queryClient.setQueryData(projectKeys.detail(projectId), optimisticUpdate);
+
+        // Update project in lists cache
+        queryClient.setQueriesData(
+          { queryKey: projectKeys.lists() },
+          (oldData) => {
+            if (!oldData) return oldData;
+
+            // Handle infinite query structure
+            if (oldData.pages) {
+              return {
+                ...oldData,
+                pages: oldData.pages.map(page => ({
+                  ...page,
+                  data: page.data.map(project => 
+                    project.id === projectId 
+                      ? { ...project, ...projectData, updated_at: new Date().toISOString() }
+                      : project
+                  )
+                }))
+              };
+            }
+
+            // Handle regular array structure
+            if (Array.isArray(oldData.data)) {
+              return {
+                ...oldData,
+                data: oldData.data.map(project => 
+                  project.id === projectId 
+                    ? { ...project, ...projectData, updated_at: new Date().toISOString() }
+                    : project
+                )
+              };
+            }
+
+            return oldData;
+          }
+        );
+      }
+
+      // Return a context object with the snapshotted value
+      return { previousProject, previousLists: queryClient.getQueriesData({ queryKey: projectKeys.lists() }) };
+    },
+
     onSuccess: (data, variables) => {
-      // Update the specific project in cache
-      queryClient.setQueryData(projectKeys.detail(variables.projectId), {
+      const { projectId } = variables;
+      
+      // Update the specific project in cache with server response
+      queryClient.setQueryData(projectKeys.detail(projectId), {
         success: true,
         data: data.data,
       });
       
-      // Invalidate projects list to reflect changes
+      // Invalidate related queries to ensure consistency
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.stats(projectId) });
+      
+      // Background refetch of project lists to sync any server-side changes
+      queryClient.refetchQueries({ 
+        queryKey: projectKeys.lists(),
+        type: 'active' 
+      });
+
+      console.log('Project updated successfully:', data.data.title);
+    },
+
+    onError: (error, variables, context) => {
+      const { projectId } = variables;
+      
+      // Rollback optimistic updates
+      if (context?.previousProject) {
+        queryClient.setQueryData(projectKeys.detail(projectId), context.previousProject);
+      }
+      
+      // Rollback list updates
+      if (context?.previousLists) {
+        context.previousLists.forEach(([queryKey, queryData]) => {
+          queryClient.setQueryData(queryKey, queryData);
+        });
+      }
+      
+      // Log error for debugging
+      console.error('Update project error:', error);
+      
+      // Refetch to ensure we have the correct state
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
-    onError: (error) => {
-      console.log('Update project error:', error);
+
+    // Settled callback for cleanup
+    onSettled: (data, error, variables) => {
+      const { projectId } = variables;
+      
+      // Ensure we have fresh data after update
+      if (!error) {
+        // Refetch project stats as they might have changed
+        queryClient.invalidateQueries({ queryKey: projectKeys.stats(projectId) });
+      }
     },
+
+    // Retry configuration
+    retry: (failureCount, error) => {
+      // Don't retry on validation errors (4xx)
+      if (error?.response?.status >= 400 && error?.response?.status < 500) {
+        return false;
+      }
+      
+      // Retry up to 2 times for network/server errors
+      return failureCount < 2;
+    },
+    
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 };
 
@@ -109,6 +246,45 @@ export const useDeleteProject = () => {
 
   return useMutation({
     mutationFn: projectService.deleteProject,
+    onMutate: async (projectId) => {
+      // Cancel queries
+      await queryClient.cancelQueries({ queryKey: projectKeys.detail(projectId) });
+      await queryClient.cancelQueries({ queryKey: projectKeys.lists() });
+
+      // Get snapshots for rollback
+      const previousProject = queryClient.getQueryData(projectKeys.detail(projectId));
+      const previousLists = queryClient.getQueriesData({ queryKey: projectKeys.lists() });
+
+      // Optimistically remove project from lists
+      queryClient.setQueriesData(
+        { queryKey: projectKeys.lists() },
+        (oldData) => {
+          if (!oldData) return oldData;
+
+          if (oldData.pages) {
+            return {
+              ...oldData,
+              pages: oldData.pages.map(page => ({
+                ...page,
+                data: page.data.filter(project => project.id !== projectId)
+              }))
+            };
+          }
+
+          if (Array.isArray(oldData.data)) {
+            return {
+              ...oldData,
+              data: oldData.data.filter(project => project.id !== projectId)
+            };
+          }
+
+          return oldData;
+        }
+      );
+
+      return { previousProject, previousLists };
+    },
+
     onSuccess: (data, projectId) => {
       // Remove from cache
       queryClient.removeQueries({ queryKey: projectKeys.detail(projectId) });
@@ -117,7 +293,19 @@ export const useDeleteProject = () => {
       // Invalidate projects list
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
-    onError: (error) => {
+
+    onError: (error, projectId, context) => {
+      // Rollback optimistic updates
+      if (context?.previousProject) {
+        queryClient.setQueryData(projectKeys.detail(projectId), context.previousProject);
+      }
+      
+      if (context?.previousLists) {
+        context.previousLists.forEach(([queryKey, queryData]) => {
+          queryClient.setQueryData(queryKey, queryData);
+        });
+      }
+      
       console.log('Delete project error:', error);
     },
   });
@@ -181,4 +369,57 @@ export const useSetPrimaryImage = () => {
       console.log('Set primary image error:', error);
     },
   });
+};
+
+// Custom hook for project update with additional utilities
+export const useProjectUpdate = (projectId) => {
+  const queryClient = useQueryClient();
+  const updateMutation = useUpdateProject();
+  
+  // Get current project data
+  const { data: projectData, isLoading } = useProject(projectId);
+  
+  const updateProject = async (formData) => {
+    if (!projectData?.data) {
+      throw new Error('Project data not loaded');
+    }
+    
+    // Prepare optimized payload (only changed fields)
+    const payload = projectService.prepareUpdatePayload(formData, projectData.data);
+    
+    if (Object.keys(payload).length === 0) {
+      throw new Error('No changes detected');
+    }
+    
+    return updateMutation.mutateAsync({
+      projectId,
+      projectData: payload,
+    });
+  };
+  
+  const resetProject = () => {
+    queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+  };
+  
+  return {
+    updateProject,
+    resetProject,
+    isUpdating: updateMutation.isPending,
+    updateError: updateMutation.error,
+    isProjectLoading: isLoading,
+    project: projectData?.data,
+  };
+};
+
+export default {
+  useInfiniteProjects,
+  useProject,
+  useProjectStats,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useAddProjectImages,
+  useDeleteProjectImage,
+  useSetPrimaryImage,
+  useProjectUpdate,
 };
